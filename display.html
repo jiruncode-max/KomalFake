@@ -99,15 +99,19 @@
         .slot-star-circle-small .star-icon { font-size: 6px; color: #ffffff; line-height: 1; }
         .slot-number-text { padding: 0 2px; color: #ffffff; font-size: 8px; font-weight: bold; line-height: 1; }
 
+        /* >>> ICON GIFT: TANPA KOTAK / TANPA BORDER — hanya icon polos <<< */
         .slot-top-right-icon {
-            position: absolute; top: 4px; right: 4px;
-            z-index: 15; width: 18px; height: 18px;
+            position: absolute; top: 3px; right: 3px;
+            z-index: 15; width: 24px; height: 24px;
             display: none; align-items: center; justify-content: center;
-            pointer-events: none; border-radius: 3px; overflow: hidden; background: transparent;
+            pointer-events: none;
+            background: transparent; border: none;
         }
         .slot-top-right-icon img {
             width: 100%; height: 100%; object-fit: contain;
-            filter: drop-shadow(0 1px 3px rgba(0,0,0,0.8));
+            /* Bayangan halus agar icon tetap terlihat di atas video terang,
+               bentuk asli icon tidak diubah sama sekali */
+            filter: drop-shadow(0 1px 2px rgba(0,0,0,0.9)) drop-shadow(0 0 1px rgba(0,0,0,0.6));
         }
 
         .slot-footer-bar {
@@ -136,7 +140,6 @@
         .mic-icon-bottom-right { display: none; align-items: center; justify-content: center; flex-shrink: 0; }
         .mic-icon-bottom-right svg { width: 12px; height: 12px; fill: #ffffff; }
 
-        /* Video sumber: disembunyikan, hanya dipakai sebagai sumber frame untuk WebGL */
         .bg-video-layer { 
             position: absolute; top: 0; left: 0;
             width: 100%; height: 100%;
@@ -146,8 +149,6 @@
             transform: translateZ(0);
         }
 
-        /* Pembungkus fallback (hanya dipakai bila WebGL tidak tersedia):
-           menampilkan hanya bagian bawah video, dengan blend screen */
         #bgCropWrap {
             position: absolute; left: 0; right: 0; bottom: 0;
             height: 50%;
@@ -158,7 +159,6 @@
             mix-blend-mode: screen;
         }
 
-        /* Canvas hasil keying: hanya bagian bawah video yang digambar */
         .bg-canvas-layer {
             position: absolute; top: 0; left: 0;
             width: 100%; height: 100%;
@@ -209,11 +209,9 @@
             </div>
         </div>
 
-        <!-- Video sumber di dalam pembungkus fallback -->
         <div id="bgCropWrap">
             <video class="bg-video-layer" id="bgVideoLayer" playsinline></video>
         </div>
-        <!-- Canvas hasil keying (yang ditampilkan di mode normal) -->
         <canvas class="bg-canvas-layer" id="bgCanvasLayer"></canvas>
     </div>
 
@@ -250,10 +248,7 @@
         const bgWrap = document.getElementById('bgCropWrap');
         const wrapper = document.querySelector('.wrapper-9-16');
 
-        /* ================= PENGATURAN AREA & TRANSPARANSI =================
-           BAGIAN_BAWAH / BAGIAN_ATAS : area video animasi yang digambar
-           KEY_LOW / KEY_HIGH         : seberapa "gelap" piksel dianggap hitam
-           FEATHER                    : kelembutan garis batas area & tepi hitam */
+        /* ================= PENGATURAN AREA & TRANSPARANSI ================= */
         const BAGIAN_BAWAH = 0.0;
         const BAGIAN_ATAS  = 0.5;
         const KEY_LOW  = 0.05;
@@ -261,16 +256,25 @@
         const FEATHER  = 0.004;
         /* ================================================================== */
 
-        /* ================== PENGATURAN NAMA TARGET ========================
-           MAKS_NAMA : jumlah karakter maksimal nama di kotak.
-                       Lebih dari ini -> dipotong + "..."           */
+        /* =============== PENGATURAN NAMA & ICON GIFT ======================
+           MAKS_NAMA      : maks karakter nama akun di kotak
+           ICON_TAMPIL_MS : durasi icon gift muncul (5 detik = 5000)
+           ICON_SIZE      : ukuran icon gift (px) — bebas diubah            */
         const MAKS_NAMA = 7;
+        const ICON_TAMPIL_MS = 5000;
+        const ICON_SIZE = 24;
         /* ================================================================== */
+
+        // Terapkan ukuran icon ke semua slot
+        for (let i = 1; i <= 8; i++) {
+            const el = document.getElementById(`slot-top-icon-${i}`);
+            if (el) { el.style.width = ICON_SIZE + 'px'; el.style.height = ICON_SIZE + 'px'; }
+        }
 
         const slotIntervals = {};
         const activeTopIconTimers = {};
 
-        /* ---------- WebGL: hanya bagian bawah video yang digambar, hitam -> transparan ---------- */
+        /* ---------- WebGL: hanya bagian bawah video, hitam -> transparan ---------- */
         let gl = null, glProgram = null, uni = {};
         let bgRAF = null, glBroken = false;
 
@@ -425,50 +429,34 @@
             bgVideo.style.display = 'none';
         }
 
-        bgVideo.onended = () => {
-            hideBg();
-            hideAllTopIcons();
-        };
+        /* Video selesai -> hanya sembunyikan video animasi.
+           Icon gift punya timer 5 detik sendiri. */
+        bgVideo.onended = () => { hideBg(); };
+
+        /* >>> Icon gift: muncul 5 detik lalu hilang <<< */
+        function showGiftIcon(slotId, iconUrl) {
+            const topIconEl = document.getElementById(`slot-top-icon-${slotId}`);
+            const topIconImg = document.getElementById(`slot-top-img-${slotId}`);
+            if (!topIconEl || !topIconImg || !iconUrl) return;
+
+            topIconImg.src = iconUrl;
+            topIconEl.style.display = 'flex';
+
+            if (activeTopIconTimers[slotId]) clearTimeout(activeTopIconTimers[slotId]);
+            activeTopIconTimers[slotId] = setTimeout(() => {
+                topIconEl.style.display = 'none';
+                activeTopIconTimers[slotId] = null;
+            }, ICON_TAMPIL_MS);
+        }
 
         function hideAllTopIcons() {
             for (let i = 1; i <= 8; i++) {
                 const iconEl = document.getElementById(`slot-top-icon-${i}`);
                 if (iconEl) iconEl.style.display = 'none';
+                if (activeTopIconTimers[i]) { clearTimeout(activeTopIconTimers[i]); activeTopIconTimers[i] = null; }
             }
         }
 
-        function scheduleIconHide(slotId) {
-            const topIconEl = document.getElementById(`slot-top-icon-${slotId}`);
-            if (!topIconEl) return;
-            if (activeTopIconTimers[slotId]) clearTimeout(activeTopIconTimers[slotId]);
-            const dur = bgVideo.duration;
-            if (!isNaN(dur) && dur > 0) {
-                activeTopIconTimers[slotId] = setTimeout(() => { topIconEl.style.display = 'none'; }, dur * 1000);
-            }
-        }
-
-        function parsePointsFromName(filename) {
-            if (!filename) return 0;
-            const regex = /([\d.,]+)([km])?/i;
-            const match = filename.match(regex);
-            if (!match) return 0;
-            
-            let numStr = match[1].replace(/\./g, '').replace(/,/g, '.');
-            const modifier = match[2] ? match[2].toLowerCase() : '';
-            
-            let number = parseFloat(numStr);
-            if (isNaN(number)) return 0;
-
-            if (modifier === 'k') number *= 1_000;
-            else if (modifier === 'm') number *= 1_000_000;
-
-            return Math.round(number);
-        }
-
-        /* >>> PERUBAHAN: nama akun yang dipakai, BUKAN username.
-           Urutan prioritas field yang diterima dari panel kontrol:
-           nickname -> nick_name -> namaAkun -> nama_akun -> accountName
-           -> account_name -> displayName -> display_name -> name (username) */
         function getAccountName(data) {
             return data.nickname
                 || data.nick_name
@@ -482,15 +470,16 @@
                 || '';
         }
 
-        /* >>> PERUBAHAN: maksimal 7 karakter, kalau lebih -> 7 huruf + "..." */
         function formatShortName(name) {
             if (!name) return '';
             if (name.length > MAKS_NAMA) return name.substring(0, MAKS_NAMA) + '...';
             return name;
         }
 
+        function trimZeros(s) { return s.replace(/\.?0+$/, ''); }
         function formatPointsDisplay(num) {
-            if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+            if (num >= 1_000_000) return trimZeros((num / 1_000_000).toFixed(2)) + 'M';
+            if (num >= 1000) return trimZeros((num / 1000).toFixed(2)) + 'K';
             return num.toString();
         }
 
@@ -519,15 +508,7 @@
                         bgCanvas.height = bgVideo.videoHeight;
                         updateCover();
                     }
-                    const s = data.slot;
-                    if (s && s >= 1 && s <= 8) {
-                        const slotEl = document.getElementById(`slot-${s}`);
-                        if (slotEl && slotEl.getAttribute('data-active') === 'true' && !activeTopIconTimers[s]) {
-                            scheduleIconHide(s);
-                        }
-                    }
                 };
-
                 bgVideo.load();
 
                 const startPlay = () => showBg();
@@ -542,22 +523,22 @@
                     if (slotEl && slotEl.getAttribute('data-active') === 'true') {
                         const numberTextEl = document.getElementById(`slot-num-${targetSlotId}`);
                         const starGroupEl = document.getElementById(`slot-star-group-${targetSlotId}`);
-                        const topIconEl = document.getElementById(`slot-top-icon-${targetSlotId}`);
-                        const topIconImg = document.getElementById(`slot-top-img-${targetSlotId}`);
-                        
-                        let pointsToAdd = parsePointsFromName(data.name || '');
+
+                        const multiplier = Number(data.multiplier) || 0;
+                        const giftPoints = Number(data.giftPoints) || 0;
+                        const addPoints = (data.addPoints !== undefined)
+                            ? (Number(data.addPoints) || 0)
+                            : Math.round(multiplier * giftPoints);
+
                         let currentPoints = parseInt(slotEl.getAttribute('data-points') || '0');
-                        currentPoints += pointsToAdd;
+                        currentPoints += addPoints;
                         slotEl.setAttribute('data-points', currentPoints);
-                        
+
                         if (numberTextEl) numberTextEl.innerText = formatPointsDisplay(currentPoints);
                         if (starGroupEl) starGroupEl.style.display = 'flex';
 
-                        if (topIconEl && topIconImg) {
-                            topIconImg.src = url;
-                            topIconEl.style.display = 'flex';
-                            scheduleIconHide(targetSlotId);
-                        }
+                        /* Icon gift polos (tanpa kotak/border) muncul 5 detik */
+                        showGiftIcon(targetSlotId, data.giftIcon);
                     }
                 }
             }
@@ -597,14 +578,9 @@
                         contentContainer.innerHTML = `<span class="plus">+</span><span class="label">Permintaan</span>`;
                     }
                 } else {
-                    /* >>> PERUBAHAN: pakai NAMA AKUN, bukan username <<< */
                     const rawName = getAccountName(data);
                     const shortName = formatShortName(rawName);
 
-                    /* >>> PERUBAHAN: poin awal SELALU 0.
-                       Angka di nama akun (mis. "Budi123") tidak lagi
-                       dihitung sebagai poin. Poin hanya bertambah
-                       dari gift animasi. <<< */
                     slotEl.setAttribute('data-points', '0');
                     slotEl.setAttribute('data-active', 'true');
                     slotEl.classList.add('active-slot');
