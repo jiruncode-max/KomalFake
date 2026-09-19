@@ -105,7 +105,7 @@
 
             <button class="btn-action btn-play" onclick="playGreenScreenVideo()" style="margin-top:10px;">▶ Putar Video + Tampilkan Icon ke Slot Target</button>
 
-            <!-- >>> OPSI BARU: TANPA VIDEO ANIMASI <<< -->
+            <!-- OPSI: TANPA VIDEO ANIMASI -->
             <div class="sub-section">
                 <label style="color: #fbbf24;">3. Tanpa Video Animasi (Icon Saja):</label>
                 <div class="qty-row">
@@ -150,8 +150,9 @@
     <script>
         const channel = new BroadcastChannel('live_control_channel');
 
-        /* ======================= DAFTAR GIFT =======================
-           Tambah gift baru cukup tambah baris di sini */
+        /* ======================= DAFTAR GIFT (8 TOTAL) =======================
+           Tambah gift baru cukup tambah baris di sini:
+           { name: "Nama Gift", points: JUMLAH_POIN, icon: "URL_ICON" }        */
         const GIFT_LIST = [
             {
                 name: "Yuki's Vigilance",
@@ -172,9 +173,29 @@
                 name: "Doughnut",
                 points: 30,
                 icon: "https://p16-webcast.tiktokcdn.com/img/maliva/webcast-va/4e7ad6bdf0a1d860c538f38026d4e812~tplv-obj.webp"
+            },
+            {
+                name: "Mawar",
+                points: 1,
+                icon: "https://p16-webcast.tiktokcdn.com/img/maliva/webcast-va/eba3a9bb85c33e017f3648eaf88d7189~tplv-obj.webp"
+            },
+            {
+                name: "Jari Hati",
+                points: 5,
+                icon: "https://p16-webcast.tiktokcdn.com/img/maliva/webcast-va/a4c4dc437fd3a6632aba149769491f49.png~tplv-obj.webp"
+            },
+            {
+                name: "Topi Koboi",
+                points: 99,
+                icon: "https://p16-webcast.tiktokcdn.com/img/maliva/webcast-va/2f1e4f3f5c728ffbfa35705b480fdc92~tplv-obj.webp"
+            },
+            {
+                name: "Kalung Emas",
+                points: 200,
+                icon: "https://p16-webcast.tiktokcdn.com/img/maliva/webcast-va/resource/21549ba24f76a01d00373cb8e35660ae.png~tplv-obj.webp"
             }
         ];
-        /* =========================================================== */
+        /* ==================================================================== */
 
         let gsVideoUrl = '';
         let hostVideoUrl = '';
@@ -271,7 +292,7 @@
             });
         }
 
-        /* >>> MODE 2 BARU: Icon SAJA tanpa video animasi <<< */
+        /* MODE 2: Icon SAJA tanpa video animasi */
         function showGiftIconOnly() {
             const slotId = document.getElementById('targetSlot').value;
             const gift = GIFT_LIST[giftSelect.value] || GIFT_LIST[0];
