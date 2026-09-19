@@ -66,11 +66,6 @@
             <label for="gsVideoFile" style="color: #34d399;">Upload Video Efek Gift / Latar Belakang:</label>
             <input type="file" id="gsVideoFile" accept="video/*">
             <button class="btn-action btn-play" onclick="playGreenScreenVideo()">Tampilkan Video ke Slot Target</button>
-
-            <!-- FITUR TAMBAHAN: Upload Video untuk diambil frame fotonya -->
-            <label for="manualPhotoVideoFile" style="margin-top:15px; font-size: 0.85rem; color: #38bdf8;">Upload Foto Profil Manual (Opsional, Jika Gagal Deteksi):</label>
-            <input type="file" id="manualPhotoVideoFile" accept="video/*" style="font-size: 11px; padding: 6px;">
-            <div id="videoExtractionStatus" style="font-size: 11px; color: #94a3b8; margin-top: -4px;">Pilih file video untuk mengambil gambar profil otomatis</div>
         </div>
 
         <!-- Input Target Permintaan / Slot -->
@@ -104,15 +99,11 @@
         </div>
     </div>
 
-    <!-- Hidden video element untuk mengekstrak frame gambar dari video -->
-    <video id="hiddenExtractorVideo" style="display:none;" muted playsinline></video>
-
     <script>
         const channel = new BroadcastChannel('live_control_channel');
         let gsVideoUrl = '';
         let hostVideoUrl = '';
         let pendingTargetData = { username: '', name: '', photo: '' };
-        let customManualPhotoUrl = '';
 
         function normalize(v) {
             let s = String(v || "").trim();
@@ -160,9 +151,6 @@
         }
 
         const targetInput = document.getElementById('targetInput');
-        const manualPhotoVideoFile = document.getElementById('manualPhotoVideoFile');
-        const videoExtractionStatus = document.getElementById('videoExtractionStatus');
-        const hiddenExtractorVideo = document.getElementById('hiddenExtractorVideo');
         const statusMsg = document.getElementById('statusMsg');
         const previewImg = document.getElementById('previewImg');
         const targetCardInline = document.getElementById('targetCardInline');
@@ -176,50 +164,6 @@
             btnInstall.disabled = true;
             clearTimeout(timeout);
             timeout = setTimeout(() => { stageProfile(); }, 800);
-        });
-
-        manualPhotoVideoFile.addEventListener('change', (e) => {
-            const file = e.target.files[0];
-            if (!file) return;
-
-            videoExtractionStatus.innerText = "Mengekstrak frame dari video...";
-            videoExtractionStatus.style.color = "#facc15";
-
-            const blobUrl = URL.createObjectURL(file);
-            hiddenExtractorVideo.src = blobUrl;
-            hiddenExtractorVideo.currentTime = 0.5;
-
-            hiddenExtractorVideo.onloadeddata = () => {
-                hiddenExtractorVideo.currentTime = 0.5;
-            };
-
-            hiddenExtractorVideo.onseeked = () => {
-                try {
-                    const canvas = document.createElement('canvas');
-                    canvas.width = hiddenExtractorVideo.videoWidth || 300;
-                    canvas.height = hiddenExtractorVideo.videoHeight || 300;
-                    const ctx = canvas.getContext('2d');
-                    ctx.drawImage(hiddenExtractorVideo, 0, 0, canvas.width, canvas.height);
-                    
-                    customManualPhotoUrl = canvas.toDataURL('image/png');
-                    previewImg.src = customManualPhotoUrl;
-                    pendingTargetData.photo = customManualPhotoUrl;
-
-                    videoExtractionStatus.innerText = "Berhasil mengambil foto dari video!";
-                    videoExtractionStatus.style.color = "#4ade80";
-
-                    if (targetInput.value.trim() !== "") {
-                        btnInstall.innerText = "Pasang ke Display";
-                        btnInstall.disabled = false;
-                        statusMsg.innerText = "Foto Manual Digunakan!";
-                        statusMsg.className = 'status-msg success';
-                    }
-                } catch (err) {
-                    console.error(err);
-                    videoExtractionStatus.innerText = "Gagal ekstrak video, coba file lain.";
-                    videoExtractionStatus.style.color = "#f87171";
-                }
-            };
         });
 
         async function stageProfile() {
@@ -239,44 +183,45 @@
             statusMsg.className = 'status-msg loading';
             targetCardInline.classList.add('show');
             
-            let currentPhoto = customManualPhotoUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(inputVal)}&background=random&size=128`;
+            /* Awal: pakai teks input & avatar placeholder.
+               Setelah API berhasil, diganti NAMA TIKTOK asli + foto profil asli */
+            let currentPhoto = `https://ui-avatars.com/api/?name=${encodeURIComponent(cleanUsername)}&background=random&size=128`;
             
             previewImg.src = currentPhoto;
-            targetName.innerText = inputVal;
+            targetName.innerText = cleanUsername;
             targetUsername.innerText = '@' + cleanUsername;
 
             try {
                 const data = await requestTikwmUser(cleanUsername);
                 
-                if (!customManualPhotoUrl) {
-                    currentPhoto = data.avatar;
-                }
-
+                /* >>> PERUBAHAN UTAMA: yang dipakai adalah NAMA TIKTOK (nickname)
+                   yang diambil dari API, BUKAN username / teks input <<< */
                 pendingTargetData = {
                     username: '@' + data.username,
-                    name: inputVal,
-                    photo: currentPhoto
+                    name: data.name,
+                    photo: data.avatar
                 };
 
-                previewImg.src = currentPhoto;
-                targetName.innerText = inputVal;
+                previewImg.src = data.avatar;
+                targetName.innerText = data.name;
                 targetUsername.innerText = '@' + data.username;
                 
-                statusMsg.innerText = "Terdeteksi!";
+                statusMsg.innerText = "Terdeteksi! Nama TikTok: " + data.name;
                 statusMsg.className = 'status-msg success';
                 btnInstall.innerText = "Pasang ke Display";
                 btnInstall.disabled = false;
             } catch (error) {
                 console.error(error);
-                statusMsg.innerText = "Menggunakan Input Manual/Nama Langsung";
-                statusMsg.className = 'status-msg success';
+                /* Fallback: kalau API gagal, pakai teks input apa adanya */
+                statusMsg.innerText = "Akun tidak terdeteksi. Menggunakan input manual.";
+                statusMsg.className = 'status-msg error';
                 
                 btnInstall.innerText = "Pasang ke Display";
                 btnInstall.disabled = false;
                 
                 pendingTargetData = {
                     username: '@' + cleanUsername,
-                    name: inputVal,
+                    name: cleanUsername,
                     photo: currentPhoto
                 };
             }
@@ -288,7 +233,11 @@
             
             const finalData = {
                 slot: slotId,
+                /* name = NAMA TIKTOK (nickname) -> inilah yang muncul di kotak display.
+                   nickname ikut dikirim sebagai cadangan untuk display. */
                 name: pendingTargetData.name,
+                nickname: pendingTargetData.name,
+                username: pendingTargetData.username,
                 photo: pendingTargetData.photo,
                 clear: false
             };
@@ -296,10 +245,6 @@
             channel.postMessage({ type: 'UPDATE_TARGET_SLOT', data: finalData });
             
             targetInput.value = '';
-            manualPhotoVideoFile.value = '';
-            customManualPhotoUrl = '';
-            videoExtractionStatus.innerText = "Pilih file video untuk mengambil gambar profil otomatis";
-            videoExtractionStatus.style.color = "#94a3b8";
             targetCardInline.classList.remove('show');
             statusMsg.innerText = `Kotak ${slotId} Berhasil Dipasang!`;
             statusMsg.className = 'status-msg success';
@@ -311,10 +256,6 @@
         function clearTarget() {
             const slotId = document.getElementById('targetSlot').value;
             targetInput.value = '';
-            manualPhotoVideoFile.value = '';
-            customManualPhotoUrl = '';
-            videoExtractionStatus.innerText = "Pilih file video untuk mengambil gambar profil otomatis";
-            videoExtractionStatus.style.color = "#94a3b8";
             targetCardInline.classList.remove('show');
             statusMsg.innerText = 'Siap';
             statusMsg.className = 'status-msg';
