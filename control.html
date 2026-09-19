@@ -18,7 +18,7 @@
         h2 { border-bottom: 2px solid #334155; padding-bottom: 10px; margin-top: 0; font-size: 1.2rem; color: #38bdf8; }
         .form-group { margin-bottom: 20px; background: #1e293b; padding: 15px; border-radius: 8px; border: 1px solid #334155; }
         label { display: block; margin-bottom: 8px; font-weight: bold; font-size: 0.9rem; color: #94a3b8; }
-        input[type="text"], select, input[type="file"] {
+        input[type="text"], input[type="number"], select, input[type="file"] {
             width: 100%; padding: 10px; background: #020617;
             border: 1px solid #475569; color: white; border-radius: 6px; box-sizing: border-box; margin-bottom: 8px; outline: none;
         }
@@ -31,6 +31,7 @@
         .btn-action:hover { opacity: 0.9; }
         .btn-play { background: #10b981; }
         .btn-host { background: #8b5cf6; }
+        .btn-icon-only { background: #f59e0b; }
         .target-card-inline {
             display: none; align-items: center; gap: 10px; margin-top: 5px; margin-bottom: 8px;
             background: #0f172a; padding: 8px; border-radius: 6px; border: 1px solid #475569;
@@ -48,7 +49,6 @@
         .status-msg.success { color: #4ade80; }
         .status-msg.error { color: #f87171; }
 
-        /* Kartu preview gift terpilih */
         .gift-preview-card {
             display: flex; align-items: center; gap: 10px; margin-top: 5px; margin-bottom: 8px;
             background: #0f172a; padding: 8px; border-radius: 6px; border: 1px solid #475569;
@@ -61,9 +61,15 @@
         .gift-points-preview { font-size: 11px; color: #facc15; }
         .calc-box {
             background: #020617; border: 1px dashed #475569; border-radius: 6px;
-            padding: 8px; font-size: 11px; color: #94a3b8; margin-top: 5px; line-height: 1.6;
+            padding: 8px; font-size: 11px; color: #94a3b8; margin-top: 5px; line-height: 1.7;
         }
         .calc-box b { color: #4ade80; }
+        .sub-section {
+            margin-top: 12px; padding-top: 10px; border-top: 1px dashed #475569;
+        }
+        .qty-row { display: flex; align-items: center; gap: 8px; }
+        .qty-row input { width: 80px; margin-bottom: 0; }
+        .qty-row span { font-size: 12px; color: #94a3b8; }
     </style>
 </head>
 <body>
@@ -80,7 +86,7 @@
 
         <!-- Video Animasi Gift + Pilih Nama Gift -->
         <div class="form-group" style="border-color: #10b981;">
-            <label for="gsVideoFile" style="color: #34d399;">1. Upload Video Animasi Gift:</label>
+            <label for="gsVideoFile" style="color: #34d399;">1. Upload Video Animasi Gift (Opsional):</label>
             <input type="file" id="gsVideoFile" accept="video/*">
             <div id="gsFileInfo" class="status-msg">Contoh nama file: gift_6.00K.mp4 (angka = pengali poin)</div>
 
@@ -95,11 +101,19 @@
                 </div>
             </div>
 
-            <div class="calc-box" id="calcBox">
-                Pilih video & gift untuk melihat hitungan poin.
-            </div>
+            <div class="calc-box" id="calcBox"></div>
 
             <button class="btn-action btn-play" onclick="playGreenScreenVideo()" style="margin-top:10px;">▶ Putar Video + Tampilkan Icon ke Slot Target</button>
+
+            <!-- >>> OPSI BARU: TANPA VIDEO ANIMASI <<< -->
+            <div class="sub-section">
+                <label style="color: #fbbf24;">3. Tanpa Video Animasi (Icon Saja):</label>
+                <div class="qty-row">
+                    <input type="number" id="iconOnlyQty" value="1" min="1" step="1">
+                    <span>× jumlah gift (dikali poin gift)</span>
+                </div>
+                <button class="btn-action btn-icon-only" onclick="showGiftIconOnly()">★ Tampilkan Icon Gift Saja ke Slot Target (5 Detik)</button>
+            </div>
         </div>
 
         <!-- Input Target Permintaan / Slot -->
@@ -137,8 +151,7 @@
         const channel = new BroadcastChannel('live_control_channel');
 
         /* ======================= DAFTAR GIFT =======================
-           Tambah gift baru cukup tambah baris di sini:
-           { name: "Nama Gift", points: 42999, icon: "URL_ICON" } */
+           Tambah gift baru cukup tambah baris di sini */
         const GIFT_LIST = [
             {
                 name: "Yuki's Vigilance",
@@ -149,6 +162,16 @@
                 name: "Rin the Snowborn",
                 points: 25999,
                 icon: "https://p16-webcast.tiktokcdn.com/img/alisg/webcast-sg/resource/242b68f7c08a95d710e3062a2647c027.png~tplv-obj.webp"
+            },
+            {
+                name: "Lord Marcellus",
+                points: 42999,
+                icon: "https://p16-webcast.tiktokcdn.com/img/alisg/webcast-sg/resource/41502579bacbbf9f31f43b7c7582cb26.png~tplv-obj.webp"
+            },
+            {
+                name: "Doughnut",
+                points: 30,
+                icon: "https://p16-webcast.tiktokcdn.com/img/maliva/webcast-va/4e7ad6bdf0a1d860c538f38026d4e812~tplv-obj.webp"
             }
         ];
         /* =========================================================== */
@@ -158,13 +181,13 @@
         let pendingTargetData = { username: '', name: '', photo: '' };
         let currentMultiplier = 0;
 
-        /* ---------- Isi dropdown gift + preview ---------- */
         const giftSelect = document.getElementById('giftSelect');
         const giftPreviewIcon = document.getElementById('giftPreviewIcon');
         const giftPreviewName = document.getElementById('giftPreviewName');
         const giftPreviewPoints = document.getElementById('giftPreviewPoints');
         const calcBox = document.getElementById('calcBox');
         const gsFileInfo = document.getElementById('gsFileInfo');
+        const iconOnlyQty = document.getElementById('iconOnlyQty');
 
         GIFT_LIST.forEach((g, idx) => {
             const opt = document.createElement('option');
@@ -181,10 +204,10 @@
             updateCalcBox();
         }
         giftSelect.addEventListener('change', updateGiftPreview);
+        iconOnlyQty.addEventListener('input', updateCalcBox);
         updateGiftPreview();
 
-        /* ---------- Deteksi pengali dari NAMA FILE video ---------- */
-        /* "gift_6.00K.mp4" -> 6.00 | "rose_1.5K.mp4" -> 1.5 | "x2.mp4" -> 2 */
+        /* Deteksi pengali dari NAMA FILE video: "gift_6.00K.mp4" -> 6.00 */
         function parseMultiplierFromFilename(filename) {
             if (!filename) return 0;
             const match = filename.match(/(\d+(?:[.,]\d+)?)/);
@@ -202,16 +225,20 @@
 
         function updateCalcBox() {
             const g = GIFT_LIST[giftSelect.value] || GIFT_LIST[0];
-            if (!currentMultiplier) {
-                calcBox.innerHTML = `Pengali: <b>-</b> (belum ada video / nama file tanpa angka)<br>` +
-                    `Poin per gift ${g.name}: <b>${g.points.toLocaleString('id-ID')}</b>`;
-                return;
+            const qty = Math.max(1, parseInt(iconOnlyQty.value) || 1);
+            const iconTotal = qty * g.points;
+
+            let html = `<b>Mode Icon Saja:</b> ${qty} × ${g.points.toLocaleString('id-ID')} = ` +
+                       `<b>${iconTotal.toLocaleString('id-ID')}</b> (${formatPointsShort(iconTotal)})`;
+
+            if (currentMultiplier) {
+                const videoTotal = Math.round(currentMultiplier * g.points);
+                html += `<br><b>Mode Video:</b> ${currentMultiplier} × ${g.points.toLocaleString('id-ID')} = ` +
+                        `<b>${videoTotal.toLocaleString('id-ID')}</b> (${formatPointsShort(videoTotal)})`;
+            } else {
+                html += `<br><b>Mode Video:</b> belum ada video / nama file tanpa angka`;
             }
-            const total = Math.round(currentMultiplier * g.points);
-            calcBox.innerHTML =
-                `Pengali dari nama file: <b>${currentMultiplier}</b><br>` +
-                `${currentMultiplier} × ${g.points.toLocaleString('id-ID')} = <b>${total.toLocaleString('id-ID')}</b> poin<br>` +
-                `Tampil di kotak: <b>${formatPointsShort(total)}</b>`;
+            calcBox.innerHTML = html;
         }
 
         document.getElementById('gsVideoFile').addEventListener('change', (e) => {
@@ -219,13 +246,14 @@
             if (!file) return;
             gsVideoUrl = URL.createObjectURL(file);
             currentMultiplier = parseMultiplierFromFilename(file.name);
-            gsFileInfo.innerText = `Video: ${file.name}`;
+            gsFileInfo.innerText = `Video: ${file.name} (pengali: ${currentMultiplier || '-'})`;
             gsFileInfo.className = 'status-msg success';
             updateCalcBox();
         });
 
+        /* MODE 1: Video animasi + icon + poin */
         function playGreenScreenVideo() {
-            if (!gsVideoUrl) return alert('Upload video animasi gift dulu!');
+            if (!gsVideoUrl) return alert('Upload video animasi gift dulu! (Atau pakai "Icon Saja")');
             const slotId = document.getElementById('targetSlot').value;
             const gift = GIFT_LIST[giftSelect.value] || GIFT_LIST[0];
 
@@ -239,6 +267,25 @@
                     giftPoints: gift.points,
                     multiplier: currentMultiplier,
                     addPoints: Math.round(currentMultiplier * gift.points)
+                }
+            });
+        }
+
+        /* >>> MODE 2 BARU: Icon SAJA tanpa video animasi <<< */
+        function showGiftIconOnly() {
+            const slotId = document.getElementById('targetSlot').value;
+            const gift = GIFT_LIST[giftSelect.value] || GIFT_LIST[0];
+            const qty = Math.max(1, parseInt(iconOnlyQty.value) || 1);
+
+            channel.postMessage({
+                type: 'UPDATE_GIFT_ICON',
+                data: {
+                    slot: slotId,
+                    giftName: gift.name,
+                    giftIcon: gift.icon,
+                    giftPoints: gift.points,
+                    multiplier: qty,
+                    addPoints: qty * gift.points
                 }
             });
         }
@@ -333,7 +380,6 @@
 
             try {
                 const data = await requestTikwmUser(cleanUsername);
-                /* Yang dipakai: NAMA TIKTOK (nickname) + foto profil asli */
                 pendingTargetData = { username: '@' + data.username, name: data.name, photo: data.avatar };
                 previewImg.src = data.avatar;
                 targetName.innerText = data.name;
