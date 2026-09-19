@@ -29,10 +29,12 @@
             border-radius: 0px;
         }
 
+        /* VIDIO HOST: area ATAS (tinggi diatur via JS = 30%) */
         .host-video-layer {
             position: absolute;
             top: 0; left: 0;
-            width: 100%; height: 100%;
+            width: 100%;
+            height: 30%;
             object-fit: cover;
             z-index: 1;
             display: none;
@@ -40,13 +42,15 @@
         }
 
         .main-container {
-            position: relative;
+            position: absolute;
+            top: 0; left: 0;
             display: flex; 
             justify-content: space-between; 
             align-items: flex-start;
             width: 100%; 
             padding: 8px 16px 0 16px; 
-            z-index: 5;
+            z-index: 30;
+            pointer-events: none;
         }
 
         .side-column { display: flex; flex-direction: column; gap: 8px; width: 92px; }
@@ -61,6 +65,7 @@
             border: 1px solid rgba(255, 255, 255, 0.12);
             box-shadow: inset 0 0 0 0px #1890ff;
             transition: background-color 0.3s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+            pointer-events: auto;
         }
         
         .box.active-slot { background-color: rgba(90, 90, 90, 0.85); }
@@ -136,35 +141,32 @@
         .mic-icon-bottom-right { display: none; align-items: center; justify-content: center; flex-shrink: 0; }
         .mic-icon-bottom-right svg { width: 8px; height: 8px; fill: #ffffff; }
 
-        /* Video sumber: disembunyikan, hanya dipakai sebagai sumber frame untuk WebGL */
-        .bg-video-layer { 
-            position: absolute; top: 0; left: 0;
-            width: 100%; height: 100%;
-            object-fit: cover;
-            display: none; 
-            pointer-events: none; 
-            transform: translateZ(0);
-        }
-
-        /* Pembungkus fallback (hanya dipakai bila WebGL tidak tersedia):
-           menampilkan hanya bagian bawah video, dengan blend screen */
-        #bgCropWrap {
-            position: absolute; left: 0; right: 0; bottom: 0;
-            height: 50%;
+        /* VIDIO ANIMASI: area BAWAH (tinggi diatur via JS = 70%) */
+        .anim-area {
+            position: absolute;
+            left: 0; right: 0; bottom: 0;
+            width: 100%;
+            height: 70%;
             overflow: hidden;
             z-index: 20;
             display: none;
             pointer-events: none;
-            mix-blend-mode: screen;
         }
 
-        /* Canvas hasil keying: hanya bagian bawah video yang digambar */
-        .bg-canvas-layer {
+        /* Video animasi langsung (mode tanpa keying / fallback): kualitas native penuh */
+        .anim-video {
             position: absolute; top: 0; left: 0;
             width: 100%; height: 100%;
-            z-index: 20;
+            object-fit: cover;
             display: none;
-            pointer-events: none;
+            transform: translateZ(0);
+        }
+
+        /* Canvas keying: dirender pada resolusi ASLI video -> tajam/HD */
+        .anim-canvas {
+            position: absolute; top: 0; left: 0;
+            width: 100%; height: 100%;
+            display: none;
             transform: translateZ(0);
         }
 
@@ -191,8 +193,10 @@
 <body>
 
     <div class="wrapper-9-16">
+        <!-- VIDIO HOST (area atas) -->
         <video class="host-video-layer" id="hostVideoLayer" playsinline loop muted></video>
 
+        <!-- UI Slot (di atas segalanya agar selalu terbaca jelas) -->
         <div class="main-container">
             <div class="side-column">
                 <div class="box" id="slot-1" data-points="0" data-active="false"></div>
@@ -209,12 +213,11 @@
             </div>
         </div>
 
-        <!-- Video sumber di dalam pembungkus fallback -->
-        <div id="bgCropWrap">
-            <video class="bg-video-layer" id="bgVideoLayer" playsinline></video>
+        <!-- VIDIO ANIMASI (area bawah) -->
+        <div class="anim-area" id="animArea">
+            <video class="anim-video" id="bgVideoLayer" playsinline></video>
+            <canvas class="anim-canvas" id="bgCanvasLayer"></canvas>
         </div>
-        <!-- Canvas hasil keying (yang ditampilkan di mode normal) -->
-        <canvas class="bg-canvas-layer" id="bgCanvasLayer"></canvas>
     </div>
 
     <script>
@@ -247,36 +250,41 @@
         const hostVideo = document.getElementById('hostVideoLayer');
         const bgVideo = document.getElementById('bgVideoLayer');
         const bgCanvas = document.getElementById('bgCanvasLayer');
-        const bgWrap = document.getElementById('bgCropWrap');
-        const wrapper = document.querySelector('.wrapper-9-16');
+        const animArea = document.getElementById('animArea');
 
-        /* ================= PENGATURAN AREA & TRANSPARANSI =================
-           Semua posisi diukur dari BAWAH video (0 = tepi paling bawah, 1 = paling atas).
+        /* ================= PENGATURAN LAYOUT & KUALITAS =================
+           HOST_TINGGI    : tinggi area vidio host dalam persen layar
+           ANIMASI_TINGGI : tinggi area vidio animasi dalam persen layar
+                            (usahakan keduanya berjumlah 100)
 
-           BAGIAN_BAWAH : batas bawah area yang ditampilkan
-           BAGIAN_ATAS  : batas atas area yang ditampilkan
+           HAPUS_HITAM    : true  -> hitam pada vidio animasi jadi transparan,
+                                    warna tampil SOLID 100% warna asli
+                            false -> vidio animasi tampil utuh apa adanya
 
-           0.0 / 0.5  -> HANYA setengah bagian BAWAH video yang tampil (default sekarang)
-           0.0 / 1.0  -> seluruh video tampil (seperti versi pertama)
-           0.5 / 1.0  -> hanya setengah bagian ATAS video yang tampil (versi sebelumnya)
-
-           Di LUAR area ini video animasi TIDAK digambar sama sekali (transparan total).
-
-           KEY_LOW / KEY_HIGH : seberapa "gelap" piksel dianggap hitam (jadi transparan)
-           FEATHER            : kelembutan garis batas area & tepi hitam */
-        const BAGIAN_BAWAH = 0.0;
-        const BAGIAN_ATAS  = 0.5;
-        const KEY_LOW  = 0.05;
+           KEY_LOW / KEY_HIGH : seberapa "gelap" piksel dianggap hitam
+           (Agar HD: canvas dirender pada RESOLUSI ASLI vidio, bukan resolusi layar) */
+        const HOST_TINGGI = 30;     // persen
+        const ANIMASI_TINGGI = 70;  // persen
+        const HAPUS_HITAM = true;
+        const KEY_LOW = 0.05;
         const KEY_HIGH = 0.22;
-        const FEATHER  = 0.004;
-        /* ================================================================== */
+        /* ================================================================ */
+
+        // Terapkan pembagian area
+        hostVideo.style.height = HOST_TINGGI + '%';
+        animArea.style.height = ANIMASI_TINGGI + '%';
 
         const slotIntervals = {};
         const activeTopIconTimers = {};
 
-        /* ---------- WebGL: hanya bagian bawah video yang digambar, hitam -> transparan ---------- */
+        /* ---------- WebGL: hitam -> transparan, warna -> solid asli, resolusi native ---------- */
         let gl = null, glProgram = null, uni = {};
         let bgRAF = null, glBroken = false;
+        let hasGL = false;
+
+        if (HAPUS_HITAM) {
+            hasGL = initBgKeying();
+        }
 
         function initBgKeying() {
             try {
@@ -300,20 +308,12 @@
                 uniform vec2 u_offset;
                 uniform float u_low;
                 uniform float u_high;
-                uniform float u_bandBottom;
-                uniform float u_bandTop;
-                uniform float u_feather;
                 void main() {
                     vec2 uv = u_offset + (v_uv - 0.5) * u_scale;
                     vec4 c = texture2D(u_tex, uv);
                     float lum = max(c.r, max(c.g, c.b));
-                    float keyAlpha = smoothstep(u_low, u_high, lum);
-                    /* uv.y: 0 = bawah video, 1 = atas video.
-                       Hanya area antara u_bandBottom dan u_bandTop yang digambar.
-                       Di luar area itu alpha = 0 (tidak digambar sama sekali). */
-                    float inBand = smoothstep(u_bandBottom - u_feather, u_bandBottom + u_feather, uv.y)
-                                 * (1.0 - smoothstep(u_bandTop - u_feather, u_bandTop + u_feather, uv.y));
-                    gl_FragColor = vec4(c.rgb, keyAlpha * inBand);
+                    float a = smoothstep(u_low, u_high, lum);
+                    gl_FragColor = vec4(c.rgb, a);
                 }`;
 
             function compile(type, src) {
@@ -354,16 +354,10 @@
             uni.offset = gl.getUniformLocation(glProgram, 'u_offset');
             uni.low = gl.getUniformLocation(glProgram, 'u_low');
             uni.high = gl.getUniformLocation(glProgram, 'u_high');
-            uni.bandBottom = gl.getUniformLocation(glProgram, 'u_bandBottom');
-            uni.bandTop = gl.getUniformLocation(glProgram, 'u_bandTop');
-            uni.feather = gl.getUniformLocation(glProgram, 'u_feather');
 
             gl.uniform1i(uni.tex, 0);
             gl.uniform1f(uni.low, KEY_LOW);
             gl.uniform1f(uni.high, KEY_HIGH);
-            gl.uniform1f(uni.bandBottom, BAGIAN_BAWAH);
-            gl.uniform1f(uni.bandTop, BAGIAN_ATAS);
-            gl.uniform1f(uni.feather, FEATHER);
             gl.uniform2f(uni.scale, 1, 1);
             gl.uniform2f(uni.offset, 0.5, 0.5);
 
@@ -372,19 +366,21 @@
             return true;
         }
 
-        const hasGL = initBgKeying();
-
+        /* Crop "cover" dihitung terhadap AREA ANIMASI (bukan layar penuh)
+           agar vidio mengisi area 70% tanpa gepeng dan tanpa kehilangan ketajaman */
         function updateCover() {
             if (!gl || !bgVideo.videoWidth || !bgVideo.videoHeight) return;
-            const rect = wrapper.getBoundingClientRect();
-            const containerAspect = rect.width / Math.max(1, rect.height);
+            const rect = bgCanvas.getBoundingClientRect();
+            const areaAspect = rect.width / Math.max(1, rect.height);
             const videoAspect = bgVideo.videoWidth / bgVideo.videoHeight;
             let sx = 1, sy = 1;
-            if (videoAspect > containerAspect) sx = containerAspect / videoAspect;
-            else sy = videoAspect / containerAspect;
+            if (videoAspect > areaAspect) sx = areaAspect / videoAspect;
+            else sy = videoAspect / areaAspect;
             gl.uniform2f(uni.scale, sx, sy);
             gl.uniform2f(uni.offset, 0.5, 0.5);
         }
+
+        window.addEventListener('resize', updateCover);
 
         function renderLoop() {
             bgRAF = requestAnimationFrame(renderLoop);
@@ -397,38 +393,26 @@
                 glBroken = true;
                 if (bgRAF) { cancelAnimationFrame(bgRAF); bgRAF = null; }
                 bgCanvas.style.display = 'none';
+                bgVideo.style.display = 'block';
             }
         }
 
-        function applyFallbackCrop() {
-            const span = BAGIAN_ATAS - BAGIAN_BAWAH;
-            if (span <= 0) return;
-            bgWrap.style.height = (span * 100) + '%';
-            bgVideo.style.width = '100%';
-            bgVideo.style.height = (100 / span) + '%';
-            bgVideo.style.left = '0';
-            bgVideo.style.top = (-(1 - BAGIAN_ATAS) / span * 100) + '%';
-            bgVideo.style.objectFit = 'cover';
-        }
-
         function showBg() {
-            if (hasGL && !glBroken) {
-                bgWrap.style.display = 'none';
+            animArea.style.display = 'block';
+            if (HAPUS_HITAM && hasGL && !glBroken) {
                 bgVideo.style.display = 'none';
                 bgCanvas.style.display = 'block';
                 if (!bgRAF) renderLoop();
             } else {
                 bgCanvas.style.display = 'none';
-                applyFallbackCrop();
                 bgVideo.style.display = 'block';
-                bgWrap.style.display = 'block';
             }
         }
 
         function hideBg() {
             if (bgRAF) { cancelAnimationFrame(bgRAF); bgRAF = null; }
+            animArea.style.display = 'none';
             bgCanvas.style.display = 'none';
-            bgWrap.style.display = 'none';
             bgVideo.style.display = 'none';
         }
 
@@ -503,7 +487,10 @@
                 bgVideo.muted = false;
 
                 bgVideo.onloadedmetadata = () => {
-                    if (hasGL && !glBroken && bgVideo.videoWidth) {
+                    /* Kunci utama HD: canvas memakai RESOLUSI ASLI vidio
+                       (mis. 1080x1920), lalu ditampilkan menyesuaikan area.
+                       Hasilnya tajam, tidak pecah/blur. */
+                    if (HAPUS_HITAM && hasGL && !glBroken && bgVideo.videoWidth) {
                         bgCanvas.width = bgVideo.videoWidth;
                         bgCanvas.height = bgVideo.videoHeight;
                         updateCover();
