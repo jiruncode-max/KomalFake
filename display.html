@@ -78,7 +78,6 @@
             margin-top: 5px; text-shadow: 0 1px 2px rgba(0,0,0,0.8); 
         }
 
-        /* === Badge bintang + angka: DIBESARKAN SEDIKIT agar serasi === */
         .slot-star-number-group {
             position: absolute; top: 4px; left: 4px;
             z-index: 10; height: 14px;
@@ -117,7 +116,6 @@
             pointer-events: none;
         }
 
-        /* === NAMA TARGET: DIBESARKAN (6px -> 9px, bold) === */
         .slot-name-bottom {
             color: #ffffff; font-size: 9px; 
             display: flex; align-items: center; gap: 3px; max-width: calc(100% - 16px);
@@ -128,7 +126,6 @@
             font-weight: 700; letter-spacing: 0.2px;
         }
         
-        /* === IKON + : DIBESARKAN (9px -> 13px) === */
         .slot-name-bottom .plus-circle-icon {
             width: 13px; height: 13px; background-color: #666666;
             border: 1px solid rgba(255, 255, 255, 0.4); border-radius: 50%;
@@ -136,7 +133,6 @@
             color: #ffffff; font-size: 8px; font-weight: bold; line-height: 1; flex-shrink: 0;
         }
 
-        /* === MIKROFON: DIBESARKAN (8px -> 12px) === */
         .mic-icon-bottom-right { display: none; align-items: center; justify-content: center; flex-shrink: 0; }
         .mic-icon-bottom-right svg { width: 12px; height: 12px; fill: #ffffff; }
 
@@ -255,22 +251,20 @@
         const wrapper = document.querySelector('.wrapper-9-16');
 
         /* ================= PENGATURAN AREA & TRANSPARANSI =================
-           Semua posisi diukur dari BAWAH video (0 = tepi paling bawah, 1 = paling atas).
-
-           BAGIAN_BAWAH : batas bawah area yang ditampilkan
-           BAGIAN_ATAS  : batas atas area yang ditampilkan
-
-           0.0 / 0.5  -> HANYA setengah bagian BAWAH video yang tampil (default sekarang)
-           0.0 / 1.0  -> seluruh video tampil
-           0.5 / 1.0  -> hanya setengah bagian ATAS video yang tampil
-
-           KEY_LOW / KEY_HIGH : seberapa "gelap" piksel dianggap hitam (jadi transparan)
-           FEATHER            : kelembutan garis batas area & tepi hitam */
+           BAGIAN_BAWAH / BAGIAN_ATAS : area video animasi yang digambar
+           KEY_LOW / KEY_HIGH         : seberapa "gelap" piksel dianggap hitam
+           FEATHER                    : kelembutan garis batas area & tepi hitam */
         const BAGIAN_BAWAH = 0.0;
         const BAGIAN_ATAS  = 0.5;
         const KEY_LOW  = 0.05;
         const KEY_HIGH = 0.22;
         const FEATHER  = 0.004;
+        /* ================================================================== */
+
+        /* ================== PENGATURAN NAMA TARGET ========================
+           MAKS_NAMA : jumlah karakter maksimal nama di kotak.
+                       Lebih dari ini -> dipotong + "..."           */
+        const MAKS_NAMA = 7;
         /* ================================================================== */
 
         const slotIntervals = {};
@@ -471,9 +465,27 @@
             return Math.round(number);
         }
 
+        /* >>> PERUBAHAN: nama akun yang dipakai, BUKAN username.
+           Urutan prioritas field yang diterima dari panel kontrol:
+           nickname -> nick_name -> namaAkun -> nama_akun -> accountName
+           -> account_name -> displayName -> display_name -> name (username) */
+        function getAccountName(data) {
+            return data.nickname
+                || data.nick_name
+                || data.namaAkun
+                || data.nama_akun
+                || data.accountName
+                || data.account_name
+                || data.displayName
+                || data.display_name
+                || data.name
+                || '';
+        }
+
+        /* >>> PERUBAHAN: maksimal 7 karakter, kalau lebih -> 7 huruf + "..." */
         function formatShortName(name) {
             if (!name) return '';
-            if (name.length > 10) return name.substring(0, 10) + '...';
+            if (name.length > MAKS_NAMA) return name.substring(0, MAKS_NAMA) + '...';
             return name;
         }
 
@@ -585,16 +597,19 @@
                         contentContainer.innerHTML = `<span class="plus">+</span><span class="label">Permintaan</span>`;
                     }
                 } else {
-                    const calculatedPoints = parsePointsFromName(data.name || '');
-                    const shortName = formatShortName(data.name || '');
+                    /* >>> PERUBAHAN: pakai NAMA AKUN, bukan username <<< */
+                    const rawName = getAccountName(data);
+                    const shortName = formatShortName(rawName);
 
-                    slotEl.setAttribute('data-points', calculatedPoints);
+                    /* >>> PERUBAHAN: poin awal SELALU 0.
+                       Angka di nama akun (mis. "Budi123") tidak lagi
+                       dihitung sebagai poin. Poin hanya bertambah
+                       dari gift animasi. <<< */
+                    slotEl.setAttribute('data-points', '0');
                     slotEl.setAttribute('data-active', 'true');
                     slotEl.classList.add('active-slot');
 
-                    if (numberTextEl) numberTextEl.innerText = formatPointsDisplay(calculatedPoints);
-                    /* >>> PERUBAHAN: badge bintang + angka LANGSUNG MUNCUL
-                       begitu foto target muncul, termasuk saat angka masih 0 <<< */
+                    if (numberTextEl) numberTextEl.innerText = '0';
                     if (starGroupEl) starGroupEl.style.display = 'flex';
 
                     if (contentContainer) {
@@ -605,9 +620,6 @@
                         `;
                     }
 
-                    /* >>> PERUBAHAN: nama target, ikon +, dan mikrofon
-                       langsung muncul bersamaan dengan foto (ukuran sudah
-                       dibesarkan lewat CSS) <<< */
                     if (textNameEl) textNameEl.innerText = shortName;
                     if (footerNameEl) footerNameEl.style.display = 'flex';
                     if (micIconEl) micIconEl.style.display = 'flex';
