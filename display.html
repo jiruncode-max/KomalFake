@@ -29,7 +29,7 @@
             border-radius: 0px;
         }
 
-        /* Layer Video Host di Latar Belakang (Paling Bawah) */
+        /* Layer Video Host di Latar Belakang */
         .host-video-layer {
             position: absolute;
             top: 0; left: 0;
@@ -37,6 +37,7 @@
             object-fit: cover;
             z-index: 1;
             display: none;
+            transform: translateZ(0); /* Hardware acceleration */
         }
 
         .main-container {
@@ -46,7 +47,7 @@
             align-items: flex-start;
             width: 100%; 
             padding: 8px 16px 0 16px; 
-            z-index: 5; /* Di atas video host */
+            z-index: 5;
         }
 
         .side-column { 
@@ -145,15 +146,16 @@
         .mic-icon-bottom-right { display: none; align-items: center; justify-content: center; flex-shrink: 0; }
         .mic-icon-bottom-right svg { width: 8px; height: 8px; fill: #ffffff; }
 
-        /* Layer Video Efek Gift / Animasi (Menyatu dengan screen mode) */
+        /* Layer Video Animasi / Gift (Menggunakan contain agar resolusi asli tidak pecah/buram) */
         .bg-video-layer { 
             position: absolute; top: 0; left: 0; 
             width: 100%; height: 100%; 
-            object-fit: cover; 
+            object-fit: contain; /* Diubah dari cover ke contain agar ketajaman asli terjaga */
             z-index: 20; 
             display: none; 
             pointer-events: none; 
             mix-blend-mode: screen; 
+            transform: translateZ(0); /* Mencegah blur saat animasi berjalan */
         }
 
         .slot-content {
@@ -179,7 +181,7 @@
 <body>
 
     <div class="wrapper-9-16">
-        <!-- Elemen Video Host (Latar Belakang Utama) -->
+        <!-- Elemen Video Host -->
         <video class="host-video-layer" id="hostVideoLayer" playsinline loop muted></video>
 
         <div class="main-container">
@@ -200,7 +202,7 @@
             </div>
         </div>
 
-        <!-- Elemen Video Animasi / Gift (Menyatu di atas video host) -->
+        <!-- Elemen Video Animasi / Gift -->
         <video class="bg-video-layer" id="bgVideoLayer" playsinline></video>
     </div>
 
