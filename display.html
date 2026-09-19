@@ -146,17 +146,17 @@
         .mic-icon-bottom-right { display: none; align-items: center; justify-content: center; flex-shrink: 0; }
         .mic-icon-bottom-right svg { width: 8px; height: 8px; fill: #ffffff; }
 
-        /* Layer Video Animasi Full Layar: Warna Hitam Jadi Transparan, Warna Asli Tetap Solid */
+        /* Layer Video Animasi Full Layar: Warna Asli Solid, Background Hitam Jadi Transparan */
         .bg-video-layer { 
             position: absolute; top: 0; left: 0; 
             width: 100%; height: 100%; 
-            object-fit: cover; 
+            object-fit: cover; /* Full layar menutupi area */
             z-index: 20; 
             display: none; 
             pointer-events: none; 
-            /* Menggunakan screen agar background hitam hilang (transparan) dan objek animasi tetap warna asli */
-            mix-blend-mode: screen; 
-            transform: translateZ(0);
+            background-color: #000000; /* Memastikan basis hitam murni */
+            mix-blend-mode: screen;    /* Menghilangkan warna hitam otomatis & menjaga warna animasi asli tetap terang */
+            transform: translateZ(0);   /* Mencegah blur / menjaga ketajaman asli */
         }
 
         .slot-content {
@@ -203,7 +203,7 @@
             </div>
         </div>
 
-        <!-- Elemen Video Animasi / Gift Full Layar (Background Hitam Transparan) -->
+        <!-- Elemen Video Animasi / Gift Full Layar -->
         <video class="bg-video-layer" id="bgVideoLayer" playsinline></video>
     </div>
 
