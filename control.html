@@ -47,6 +47,23 @@
         .status-msg.loading { color: #facc15; }
         .status-msg.success { color: #4ade80; }
         .status-msg.error { color: #f87171; }
+
+        /* Kartu preview gift terpilih */
+        .gift-preview-card {
+            display: flex; align-items: center; gap: 10px; margin-top: 5px; margin-bottom: 8px;
+            background: #0f172a; padding: 8px; border-radius: 6px; border: 1px solid #475569;
+        }
+        .gift-preview-card img {
+            width: 44px; height: 44px; object-fit: contain;
+            border: 2px solid #facc15; border-radius: 8px; background: #020617; flex-shrink: 0;
+        }
+        .gift-name-preview { font-size: 13px; font-weight: bold; color: #fff; }
+        .gift-points-preview { font-size: 11px; color: #facc15; }
+        .calc-box {
+            background: #020617; border: 1px dashed #475569; border-radius: 6px;
+            padding: 8px; font-size: 11px; color: #94a3b8; margin-top: 5px; line-height: 1.6;
+        }
+        .calc-box b { color: #4ade80; }
     </style>
 </head>
 <body>
@@ -54,18 +71,35 @@
     <div class="control-panel">
         <h2>Control Panel (Pro System - 8 Slots)</h2>
         
-        <!-- OPSI PERTAMA: Upload Video Khusus Host -->
+        <!-- Upload Video Khusus Host -->
         <div class="form-group" style="border-color: #8b5cf6;">
-            <label for="hostVideoFile" style="color: #c4b5fd;">Opsi 1: Upload Video Khusus Host:</label>
+            <label for="hostVideoFile" style="color: #c4b5fd;">Upload Video Khusus Host:</label>
             <input type="file" id="hostVideoFile" accept="video/*">
             <button class="btn-action btn-host" onclick="playHostVideo()">Putar Video Host (Layar Utama)</button>
         </div>
 
-        <!-- Input Video Background / Efek Gift -->
+        <!-- Video Animasi Gift + Pilih Nama Gift -->
         <div class="form-group" style="border-color: #10b981;">
-            <label for="gsVideoFile" style="color: #34d399;">Upload Video Efek Gift / Latar Belakang:</label>
+            <label for="gsVideoFile" style="color: #34d399;">1. Upload Video Animasi Gift:</label>
             <input type="file" id="gsVideoFile" accept="video/*">
-            <button class="btn-action btn-play" onclick="playGreenScreenVideo()">Tampilkan Video ke Slot Target</button>
+            <div id="gsFileInfo" class="status-msg">Contoh nama file: gift_6.00K.mp4 (angka = pengali poin)</div>
+
+            <label style="margin-top:10px; color: #34d399;">2. Pilih Nama Gift (Icon + Poin):</label>
+            <select id="giftSelect"></select>
+
+            <div class="gift-preview-card">
+                <img id="giftPreviewIcon" src="" alt="icon gift">
+                <div>
+                    <div id="giftPreviewName" class="gift-name-preview">-</div>
+                    <div id="giftPreviewPoints" class="gift-points-preview">-</div>
+                </div>
+            </div>
+
+            <div class="calc-box" id="calcBox">
+                Pilih video & gift untuk melihat hitungan poin.
+            </div>
+
+            <button class="btn-action btn-play" onclick="playGreenScreenVideo()" style="margin-top:10px;">▶ Putar Video + Tampilkan Icon ke Slot Target</button>
         </div>
 
         <!-- Input Target Permintaan / Slot -->
@@ -82,8 +116,8 @@
                 <option value="8">Kotak 8 (Kanan Bawah)</option>
             </select>
 
-            <label style="margin-top:10px;">Username / Link TikTok Target (Poin / Nama):</label>
-            <input type="text" placeholder="Contoh: Budi 1k atau username..." id="targetInput">
+            <label style="margin-top:10px;">Username / Link TikTok Target:</label>
+            <input type="text" placeholder="Contoh: username atau link TikTok..." id="targetInput">
             
             <div id="targetCardInline" class="target-card-inline">
                 <img id="previewImg" class="preview-img" alt="Avatar">
@@ -101,17 +135,130 @@
 
     <script>
         const channel = new BroadcastChannel('live_control_channel');
+
+        /* ======================= DAFTAR GIFT =======================
+           Tambah gift baru cukup tambah baris di sini:
+           { name: "Nama Gift", points: 42999, icon: "URL_ICON" } */
+        const GIFT_LIST = [
+            {
+                name: "Yuki's Vigilance",
+                points: 42999,
+                icon: "https://p16-webcast.tiktokcdn.com/img/alisg/webcast-sg/resource/ce72697aca20b8741b1d5bff2035db78.png~tplv-obj.webp"
+            },
+            {
+                name: "Rin the Snowborn",
+                points: 25999,
+                icon: "https://p16-webcast.tiktokcdn.com/img/alisg/webcast-sg/resource/242b68f7c08a95d710e3062a2647c027.png~tplv-obj.webp"
+            }
+        ];
+        /* =========================================================== */
+
         let gsVideoUrl = '';
         let hostVideoUrl = '';
         let pendingTargetData = { username: '', name: '', photo: '' };
+        let currentMultiplier = 0;
 
+        /* ---------- Isi dropdown gift + preview ---------- */
+        const giftSelect = document.getElementById('giftSelect');
+        const giftPreviewIcon = document.getElementById('giftPreviewIcon');
+        const giftPreviewName = document.getElementById('giftPreviewName');
+        const giftPreviewPoints = document.getElementById('giftPreviewPoints');
+        const calcBox = document.getElementById('calcBox');
+        const gsFileInfo = document.getElementById('gsFileInfo');
+
+        GIFT_LIST.forEach((g, idx) => {
+            const opt = document.createElement('option');
+            opt.value = idx;
+            opt.textContent = `${g.name}  (${formatPointsShort(g.points)} poin)`;
+            giftSelect.appendChild(opt);
+        });
+
+        function updateGiftPreview() {
+            const g = GIFT_LIST[giftSelect.value] || GIFT_LIST[0];
+            giftPreviewIcon.src = g.icon;
+            giftPreviewName.innerText = g.name;
+            giftPreviewPoints.innerText = `${g.points.toLocaleString('id-ID')} poin / gift`;
+            updateCalcBox();
+        }
+        giftSelect.addEventListener('change', updateGiftPreview);
+        updateGiftPreview();
+
+        /* ---------- Deteksi pengali dari NAMA FILE video ---------- */
+        /* "gift_6.00K.mp4" -> 6.00 | "rose_1.5K.mp4" -> 1.5 | "x2.mp4" -> 2 */
+        function parseMultiplierFromFilename(filename) {
+            if (!filename) return 0;
+            const match = filename.match(/(\d+(?:[.,]\d+)?)/);
+            if (!match) return 0;
+            const val = parseFloat(match[1].replace(',', '.'));
+            return isNaN(val) ? 0 : val;
+        }
+
+        function formatPointsShort(num) {
+            if (num >= 1_000_000) return trimZeros((num / 1_000_000).toFixed(2)) + 'M';
+            if (num >= 1000) return trimZeros((num / 1000).toFixed(2)) + 'K';
+            return num.toString();
+        }
+        function trimZeros(s) { return s.replace(/\.?0+$/, ''); }
+
+        function updateCalcBox() {
+            const g = GIFT_LIST[giftSelect.value] || GIFT_LIST[0];
+            if (!currentMultiplier) {
+                calcBox.innerHTML = `Pengali: <b>-</b> (belum ada video / nama file tanpa angka)<br>` +
+                    `Poin per gift ${g.name}: <b>${g.points.toLocaleString('id-ID')}</b>`;
+                return;
+            }
+            const total = Math.round(currentMultiplier * g.points);
+            calcBox.innerHTML =
+                `Pengali dari nama file: <b>${currentMultiplier}</b><br>` +
+                `${currentMultiplier} × ${g.points.toLocaleString('id-ID')} = <b>${total.toLocaleString('id-ID')}</b> poin<br>` +
+                `Tampil di kotak: <b>${formatPointsShort(total)}</b>`;
+        }
+
+        document.getElementById('gsVideoFile').addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            gsVideoUrl = URL.createObjectURL(file);
+            currentMultiplier = parseMultiplierFromFilename(file.name);
+            gsFileInfo.innerText = `Video: ${file.name}`;
+            gsFileInfo.className = 'status-msg success';
+            updateCalcBox();
+        });
+
+        function playGreenScreenVideo() {
+            if (!gsVideoUrl) return alert('Upload video animasi gift dulu!');
+            const slotId = document.getElementById('targetSlot').value;
+            const gift = GIFT_LIST[giftSelect.value] || GIFT_LIST[0];
+
+            channel.postMessage({
+                type: 'UPDATE_GS_VIDEO',
+                url: gsVideoUrl,
+                data: {
+                    slot: slotId,
+                    giftName: gift.name,
+                    giftIcon: gift.icon,
+                    giftPoints: gift.points,
+                    multiplier: currentMultiplier,
+                    addPoints: Math.round(currentMultiplier * gift.points)
+                }
+            });
+        }
+
+        function playHostVideo() {
+            if (!hostVideoUrl) return alert('Pilih file video host terlebih dahulu!');
+            channel.postMessage({ type: 'UPDATE_HOST_VIDEO', url: hostVideoUrl });
+        }
+        document.getElementById('hostVideoFile').addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) hostVideoUrl = URL.createObjectURL(file);
+        });
+
+        /* ---------- Target slot (nama TikTok dari API) ---------- */
         function normalize(v) {
             let s = String(v || "").trim();
             s = s.replace(/^https?:\/\/(?:www\.|m\.)?tiktok\.com\//i, "");
             s = s.replace(/^@/, "");
             return s.split(/[/?#]/)[0].trim();
         }
-
         function pick(obj, keys, fb) {
             for (const k of keys) {
                 let v = obj;
@@ -120,7 +267,6 @@
             }
             return fb;
         }
-
         function extractUser(raw) {
             if (!raw || typeof raw !== "object") throw new Error("Response Kosong");
             if (raw.code !== undefined && Number(raw.code) !== 0) {
@@ -131,14 +277,12 @@
             const user = info.user || root.user || info || root;
             const username = String(pick(user, ["uniqueId", "unique_id", "username"], "")).replace(/^@/, "").trim();
             if (!username) throw new Error("Username tidak ditemukan di data");
-
             return {
                 username,
                 name: String(pick(user, ["nickname", "name", "display_name"], username)),
                 avatar: String(pick(user, ["avatarLarger", "avatarMedium", "avatarThumb", "avatar", "avatar_url"], ""))
             };
         }
-
         async function requestTikwmUser(username) {
             const res = await fetch("https://www.tikwm.com/api/user/info/", {
                 method: "POST",
@@ -146,8 +290,7 @@
                 body: "unique_id=" + encodeURIComponent(username)
             });
             if (!res.ok) throw new Error("Gagal koneksi ke server");
-            const json = await res.json();
-            return extractUser(json);
+            return extractUser(await res.json());
         }
 
         const targetInput = document.getElementById('targetInput');
@@ -182,68 +325,46 @@
             statusMsg.innerText = 'Mendeteksi...';
             statusMsg.className = 'status-msg loading';
             targetCardInline.classList.add('show');
-            
-            /* Awal: pakai teks input & avatar placeholder.
-               Setelah API berhasil, diganti NAMA TIKTOK asli + foto profil asli */
+
             let currentPhoto = `https://ui-avatars.com/api/?name=${encodeURIComponent(cleanUsername)}&background=random&size=128`;
-            
             previewImg.src = currentPhoto;
             targetName.innerText = cleanUsername;
             targetUsername.innerText = '@' + cleanUsername;
 
             try {
                 const data = await requestTikwmUser(cleanUsername);
-                
-                /* >>> PERUBAHAN UTAMA: yang dipakai adalah NAMA TIKTOK (nickname)
-                   yang diambil dari API, BUKAN username / teks input <<< */
-                pendingTargetData = {
-                    username: '@' + data.username,
-                    name: data.name,
-                    photo: data.avatar
-                };
-
+                /* Yang dipakai: NAMA TIKTOK (nickname) + foto profil asli */
+                pendingTargetData = { username: '@' + data.username, name: data.name, photo: data.avatar };
                 previewImg.src = data.avatar;
                 targetName.innerText = data.name;
                 targetUsername.innerText = '@' + data.username;
-                
                 statusMsg.innerText = "Terdeteksi! Nama TikTok: " + data.name;
                 statusMsg.className = 'status-msg success';
                 btnInstall.innerText = "Pasang ke Display";
                 btnInstall.disabled = false;
             } catch (error) {
-                console.error(error);
-                /* Fallback: kalau API gagal, pakai teks input apa adanya */
                 statusMsg.innerText = "Akun tidak terdeteksi. Menggunakan input manual.";
                 statusMsg.className = 'status-msg error';
-                
                 btnInstall.innerText = "Pasang ke Display";
                 btnInstall.disabled = false;
-                
-                pendingTargetData = {
-                    username: '@' + cleanUsername,
-                    name: cleanUsername,
-                    photo: currentPhoto
-                };
+                pendingTargetData = { username: '@' + cleanUsername, name: cleanUsername, photo: currentPhoto };
             }
         }
 
         function installTarget() {
             if (!pendingTargetData.name) return;
             const slotId = document.getElementById('targetSlot').value;
-            
-            const finalData = {
-                slot: slotId,
-                /* name = NAMA TIKTOK (nickname) -> inilah yang muncul di kotak display.
-                   nickname ikut dikirim sebagai cadangan untuk display. */
-                name: pendingTargetData.name,
-                nickname: pendingTargetData.name,
-                username: pendingTargetData.username,
-                photo: pendingTargetData.photo,
-                clear: false
-            };
-            
-            channel.postMessage({ type: 'UPDATE_TARGET_SLOT', data: finalData });
-            
+            channel.postMessage({
+                type: 'UPDATE_TARGET_SLOT',
+                data: {
+                    slot: slotId,
+                    name: pendingTargetData.name,
+                    nickname: pendingTargetData.name,
+                    username: pendingTargetData.username,
+                    photo: pendingTargetData.photo,
+                    clear: false
+                }
+            });
             targetInput.value = '';
             targetCardInline.classList.remove('show');
             statusMsg.innerText = `Kotak ${slotId} Berhasil Dipasang!`;
@@ -261,30 +382,8 @@
             statusMsg.className = 'status-msg';
             btnInstall.innerText = "Pasang ke Display";
             btnInstall.disabled = true;
-
             pendingTargetData = { username: '', name: '', photo: '' };
             channel.postMessage({ type: 'UPDATE_TARGET_SLOT', data: { slot: slotId, clear: true } });
-        }
-
-        document.getElementById('gsVideoFile').addEventListener('change', (e) => {
-            const file = e.target.files[0];
-            if (file) gsVideoUrl = URL.createObjectURL(file);
-        });
-
-        document.getElementById('hostVideoFile').addEventListener('change', (e) => {
-            const file = e.target.files[0];
-            if (file) hostVideoUrl = URL.createObjectURL(file);
-        });
-
-        function playGreenScreenVideo() {
-            if (!gsVideoUrl) return alert('Pilih file video efek gift / latar belakang dulu!');
-            const slotId = document.getElementById('targetSlot').value;
-            channel.postMessage({ type: 'UPDATE_GS_VIDEO', url: gsVideoUrl, data: { slot: slotId } });
-        }
-
-        function playHostVideo() {
-            if (!hostVideoUrl) return alert('Pilih file video host terlebih dahulu!');
-            channel.postMessage({ type: 'UPDATE_HOST_VIDEO', url: hostVideoUrl });
         }
     </script>
 </body>
