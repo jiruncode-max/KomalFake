@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TikTok Live - Control Panel Pro</title>
+    <title>TikTok Live - Control Panel Pro (8 Slots)</title>
     <style>
         * { box-sizing: border-box; }
         body {
@@ -26,10 +26,11 @@
         .btn-action {
             background: #ef4444; color: white; border: none; padding: 8px 12px;
             border-radius: 4px; cursor: pointer; font-weight: bold; width: 100%; font-size: 0.85rem;
-            transition: opacity 0.2s;
+            transition: opacity 0.2s; margin-top: 5px;
         }
         .btn-action:hover { opacity: 0.9; }
-        .btn-play { background: #10b981; margin-top: 8px; }
+        .btn-play { background: #10b981; }
+        .btn-host { background: #8b5cf6; }
         .target-card-inline {
             display: none; align-items: center; gap: 10px; margin-top: 5px; margin-bottom: 8px;
             background: #0f172a; padding: 8px; border-radius: 6px; border: 1px solid #475569;
@@ -51,27 +52,20 @@
 <body>
 
     <div class="control-panel">
-        <h2>Control Panel (Pro System)</h2>
+        <h2>Control Panel (Pro System - 8 Slots)</h2>
         
-        <!-- Input Nama Host -->
-        <div class="form-group">
-            <label for="hostUserInput">Nama Host (Tampil di Bawah Kotak):</label>
-            <input type="text" id="hostUserInput" placeholder="Masukkan nama host...">
-            <button class="btn-action btn-play" onclick="updateHostUser()">Ubah Nama Host</button>
-        </div>
-
-        <!-- Input Video Host -->
-        <div class="form-group">
-            <label for="hostVideoFile">Upload Video Host (Dalam Kotak):</label>
+        <!-- OPSI PERTAMA: Upload Video Khusus Host -->
+        <div class="form-group" style="border-color: #8b5cf6;">
+            <label for="hostVideoFile" style="color: #c4b5fd;">Opsi 1: Upload Video Khusus Host:</label>
             <input type="file" id="hostVideoFile" accept="video/*">
-            <button class="btn-action btn-play" onclick="playHostVideo()">Putar Video Host</button>
+            <button class="btn-action btn-host" onclick="playHostVideo()">Putar Video Host (Layar Utama)</button>
         </div>
 
-        <!-- Input Video Background Utama (Bersuara) -->
+        <!-- Input Video Background / Efek Gift -->
         <div class="form-group" style="border-color: #10b981;">
-            <label for="gsVideoFile" style="color: #34d399;">Upload Video Latar Belakang (Bersuara):</label>
+            <label for="gsVideoFile" style="color: #34d399;">Upload Video Efek Gift / Latar Belakang:</label>
             <input type="file" id="gsVideoFile" accept="video/*">
-            <button class="btn-action btn-play" onclick="playGreenScreenVideo()">Tampilkan Video Latar Belakang</button>
+            <button class="btn-action btn-play" onclick="playGreenScreenVideo()">Tampilkan Video ke Slot Target</button>
 
             <!-- FITUR TAMBAHAN: Upload Video untuk diambil frame fotonya -->
             <label for="manualPhotoVideoFile" style="margin-top:15px; font-size: 0.85rem; color: #38bdf8;">Upload Foto Profil Manual (Opsional, Jika Gagal Deteksi):</label>
@@ -79,16 +73,22 @@
             <div id="videoExtractionStatus" style="font-size: 11px; color: #94a3b8; margin-top: -4px;">Pilih file video untuk mengambil gambar profil otomatis</div>
         </div>
 
-        <!-- Input Target Permintaan -->
+        <!-- Input Target Permintaan / Slot -->
         <div class="form-group">
-            <label for="targetSlot">Pilih Slot Target (1 - 2):</label>
+            <label for="targetSlot">Pilih Slot Target (Kotak 1 - 8):</label>
             <select id="targetSlot">
-                <option value="1">Kotak 1</option>
-                <option value="2">Kotak 2</option>
+                <option value="1">Kotak 1 (Kiri Atas)</option>
+                <option value="2">Kotak 2 (Kiri)</option>
+                <option value="3">Kotak 3 (Kiri)</option>
+                <option value="4">Kotak 4 (Kiri Bawah)</option>
+                <option value="5">Kotak 5 (Kanan Atas)</option>
+                <option value="6">Kotak 6 (Kanan)</option>
+                <option value="7">Kotak 7 (Kanan)</option>
+                <option value="8">Kotak 8 (Kanan Bawah)</option>
             </select>
 
-            <label style="margin-top:10px;">Username / Link TikTok Target:</label>
-            <input type="text" placeholder="Masukkan username target..." id="targetInput">
+            <label style="margin-top:10px;">Username / Link TikTok Target (Poin / Nama):</label>
+            <input type="text" placeholder="Contoh: Budi 1k atau username..." id="targetInput">
             
             <div id="targetCardInline" class="target-card-inline">
                 <img id="previewImg" class="preview-img" alt="Avatar">
@@ -109,8 +109,8 @@
 
     <script>
         const channel = new BroadcastChannel('live_control_channel');
-        let hostVideoUrl = '';
         let gsVideoUrl = '';
+        let hostVideoUrl = '';
         let pendingTargetData = { username: '', name: '', photo: '' };
         let customManualPhotoUrl = '';
 
@@ -178,7 +178,6 @@
             timeout = setTimeout(() => { stageProfile(); }, 800);
         });
 
-        // Event handler ketika user memilih file video untuk diekstrak menjadi foto profil
         manualPhotoVideoFile.addEventListener('change', (e) => {
             const file = e.target.files[0];
             if (!file) return;
@@ -188,7 +187,7 @@
 
             const blobUrl = URL.createObjectURL(file);
             hiddenExtractorVideo.src = blobUrl;
-            hiddenExtractorVideo.currentTime = 0.5; // Ambil frame pada detik ke-0.5
+            hiddenExtractorVideo.currentTime = 0.5;
 
             hiddenExtractorVideo.onloadeddata = () => {
                 hiddenExtractorVideo.currentTime = 0.5;
@@ -240,10 +239,10 @@
             statusMsg.className = 'status-msg loading';
             targetCardInline.classList.add('show');
             
-            let currentPhoto = customManualPhotoUrl || `https://ui-avatars.com/api/?name=${cleanUsername}&background=random&size=128`;
+            let currentPhoto = customManualPhotoUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(inputVal)}&background=random&size=128`;
             
             previewImg.src = currentPhoto;
-            targetName.innerText = cleanUsername;
+            targetName.innerText = inputVal;
             targetUsername.innerText = '@' + cleanUsername;
 
             try {
@@ -255,12 +254,12 @@
 
                 pendingTargetData = {
                     username: '@' + data.username,
-                    name: data.name,
+                    name: inputVal,
                     photo: currentPhoto
                 };
 
                 previewImg.src = currentPhoto;
-                targetName.innerText = data.name;
+                targetName.innerText = inputVal;
                 targetUsername.innerText = '@' + data.username;
                 
                 statusMsg.innerText = "Terdeteksi!";
@@ -269,22 +268,22 @@
                 btnInstall.disabled = false;
             } catch (error) {
                 console.error(error);
-                statusMsg.innerText = "Gagal / Akun Private (Gunakan Upload Video Foto Manual di Atas)";
-                statusMsg.className = 'status-msg error';
+                statusMsg.innerText = "Menggunakan Input Manual/Nama Langsung";
+                statusMsg.className = 'status-msg success';
                 
                 btnInstall.innerText = "Pasang ke Display";
                 btnInstall.disabled = false;
                 
                 pendingTargetData = {
                     username: '@' + cleanUsername,
-                    name: cleanUsername,
+                    name: inputVal,
                     photo: currentPhoto
                 };
             }
         }
 
         function installTarget() {
-            if (!pendingTargetData.username) return;
+            if (!pendingTargetData.name) return;
             const slotId = document.getElementById('targetSlot').value;
             
             const finalData = {
@@ -326,30 +325,25 @@
             channel.postMessage({ type: 'UPDATE_TARGET_SLOT', data: { slot: slotId, clear: true } });
         }
 
-        function updateHostUser() {
-            const val = document.getElementById('hostUserInput').value;
-            channel.postMessage({ type: 'UPDATE_HOST_USER', data: val });
-        }
+        document.getElementById('gsVideoFile').addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) gsVideoUrl = URL.createObjectURL(file);
+        });
 
         document.getElementById('hostVideoFile').addEventListener('change', (e) => {
             const file = e.target.files[0];
             if (file) hostVideoUrl = URL.createObjectURL(file);
         });
 
-        function playHostVideo() {
-            if (!hostVideoUrl) return alert('Pilih file video host dulu!');
-            channel.postMessage({ type: 'UPDATE_HOST_VIDEO', url: hostVideoUrl });
-        }
-
-        document.getElementById('gsVideoFile').addEventListener('change', (e) => {
-            const file = e.target.files[0];
-            if (file) gsVideoUrl = URL.createObjectURL(file);
-        });
-
         function playGreenScreenVideo() {
-            if (!gsVideoUrl) return alert('Pilih file video latar belakang dulu!');
+            if (!gsVideoUrl) return alert('Pilih file video efek gift / latar belakang dulu!');
             const slotId = document.getElementById('targetSlot').value;
             channel.postMessage({ type: 'UPDATE_GS_VIDEO', url: gsVideoUrl, data: { slot: slotId } });
+        }
+
+        function playHostVideo() {
+            if (!hostVideoUrl) return alert('Pilih file video host terlebih dahulu!');
+            channel.postMessage({ type: 'UPDATE_HOST_VIDEO', url: hostVideoUrl });
         }
     </script>
 </body>
