@@ -21,7 +21,6 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            /* Mengubah justify-content ke flex-start agar konten dimulai dari paling atas */
             justify-content: flex-start;
             position: relative;
             padding: 0px; 
@@ -30,14 +29,24 @@
             border-radius: 0px;
         }
 
+        /* Layer Video Host di Latar Belakang (Berputar Berulang) */
+        .host-video-layer {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            object-fit: cover;
+            z-index: 1;
+            display: none;
+        }
+
         .main-container {
             position: relative;
             display: flex; 
             justify-content: space-between; 
-            align-items: flex-start; /* Mengatur posisi agar menempel di atas */
+            align-items: flex-start;
             width: 100%; 
-            padding: 8px 16px 0 16px; /* Memberikan sedikit jarak padding atas (8px) agar persis mentok garis */
-            z-index: 1;
+            padding: 8px 16px 0 16px; 
+            z-index: 5; /* Di atas video host */
         }
 
         .side-column { 
@@ -136,12 +145,15 @@
         .mic-icon-bottom-right { display: none; align-items: center; justify-content: center; flex-shrink: 0; }
         .mic-icon-bottom-right svg { width: 8px; height: 8px; fill: #ffffff; }
 
-        .host-box {
+        /* Layer Video Efek Gift / Animasi */
+        .bg-video-layer { 
+            position: absolute; top: 0; left: 0; 
+            width: 100%; height: 100%; 
+            object-fit: contain; /* Agar video animasi tidak terpotong */
+            z-index: 20; 
             display: none; 
+            pointer-events: none; 
         }
-
-        .video-bg { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; z-index: 1; display: none; pointer-events: none; }
-        .bg-video-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; z-index: 20; display: none; pointer-events: none; mix-blend-mode: screen; }
 
         .slot-content {
             position: absolute; width: 100%; height: 100%;
@@ -166,6 +178,9 @@
 <body>
 
     <div class="wrapper-9-16">
+        <!-- Elemen Video Host -->
+        <video class="host-video-layer" id="hostVideoLayer" playsinline loop muted></video>
+
         <div class="main-container">
             <!-- Kolom Kiri (Slot 1 - 4) -->
             <div class="side-column">
@@ -184,6 +199,7 @@
             </div>
         </div>
 
+        <!-- Elemen Video Animasi / Gift -->
         <video class="bg-video-layer" id="bgVideoLayer" playsinline></video>
     </div>
 
@@ -215,6 +231,7 @@
 
         const channel = new BroadcastChannel('live_control_channel');
         const bgVideo = document.getElementById('bgVideoLayer');
+        const hostVideo = document.getElementById('hostVideoLayer');
 
         const slotIntervals = {};
         const activeTopIconTimers = {};
@@ -263,6 +280,17 @@
 
         channel.onmessage = (event) => {
             const { type, data, url } = event.data;
+
+            // Penanganan Video Host (Berputar Berulang / Loop)
+            if (type === 'UPDATE_HOST_VIDEO') {
+                hostVideo.pause();
+                hostVideo.currentTime = 0;
+                hostVideo.src = url;
+                hostVideo.style.display = 'block';
+                hostVideo.load();
+                hostVideo.muted = true; // Biasanya video background/host di-mute agar tidak bentrok
+                hostVideo.play().catch(e => console.log("Gagal memutar video host:", e));
+            }
 
             if (type === 'UPDATE_GS_VIDEO') {
                 bgVideo.pause();
