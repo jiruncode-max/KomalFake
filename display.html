@@ -29,7 +29,6 @@
             border-radius: 0px;
         }
 
-        /* Layer Video Host di Latar Belakang (Full Layar) */
         .host-video-layer {
             position: absolute;
             top: 0; left: 0;
@@ -50,12 +49,7 @@
             z-index: 5;
         }
 
-        .side-column { 
-            display: flex; 
-            flex-direction: column; 
-            gap: 8px; 
-            width: 92px;
-        }
+        .side-column { display: flex; flex-direction: column; gap: 8px; width: 92px; }
 
         .box {
             width: 92px; 
@@ -69,9 +63,7 @@
             transition: background-color 0.3s ease, box-shadow 0.2s ease, border-color 0.2s ease;
         }
         
-        .box.active-slot {
-            background-color: rgba(90, 90, 90, 0.85);
-        }
+        .box.active-slot { background-color: rgba(90, 90, 90, 0.85); }
 
         .box .plus { 
             font-family: 'Cormorant Garamond', serif;
@@ -86,7 +78,6 @@
             margin-top: 5px; text-shadow: 0 1px 2px rgba(0,0,0,0.8); 
         }
 
-        /* Grup Bintang & Poin */
         .slot-star-number-group {
             position: absolute; top: 4px; left: 4px;
             z-index: 10; height: 12px;
@@ -108,7 +99,6 @@
         .slot-star-circle-small .star-icon { font-size: 5px; color: #ffffff; line-height: 1; }
         .slot-number-text { padding: 0 2px; color: #ffffff; font-size: 6px; font-weight: bold; line-height: 1; }
 
-        /* Ikon Gift di Pojok Kanan Atas */
         .slot-top-right-icon {
             position: absolute; top: 4px; right: 4px;
             z-index: 15; width: 18px; height: 18px;
@@ -146,17 +136,28 @@
         .mic-icon-bottom-right { display: none; align-items: center; justify-content: center; flex-shrink: 0; }
         .mic-icon-bottom-right svg { width: 8px; height: 8px; fill: #ffffff; }
 
-        /* Layer Video Animasi Full Layar: Warna Asli Solid, Background Hitam Jadi Transparan */
+        /* Video sumber: disembunyikan, hanya dipakai sebagai sumber frame.
+           CSS mix-blend-mode dipertahankan HANYA sebagai fallback bila WebGL tidak tersedia. */
         .bg-video-layer { 
             position: absolute; top: 0; left: 0; 
             width: 100%; height: 100%; 
-            object-fit: cover; /* Full layar menutupi area */
+            object-fit: cover;
             z-index: 20; 
             display: none; 
             pointer-events: none; 
-            background-color: #000000; /* Memastikan basis hitam murni */
-            mix-blend-mode: screen;    /* Menghilangkan warna hitam otomatis & menjaga warna animasi asli tetap terang */
-            transform: translateZ(0);   /* Mencegah blur / menjaga ketajaman asli */
+            background-color: #000000;
+            mix-blend-mode: screen;
+            transform: translateZ(0);
+        }
+
+        /* Canvas hasil keying: HITAM = transparan penuh, WARNA = solid penuh (asli) */
+        .bg-canvas-layer {
+            position: absolute; top: 0; left: 0;
+            width: 100%; height: 100%;
+            z-index: 20;
+            display: none;
+            pointer-events: none;
+            transform: translateZ(0);
         }
 
         .slot-content {
@@ -182,11 +183,9 @@
 <body>
 
     <div class="wrapper-9-16">
-        <!-- Elemen Video Host -->
         <video class="host-video-layer" id="hostVideoLayer" playsinline loop muted></video>
 
         <div class="main-container">
-            <!-- Kolom Kiri (Slot 1 - 4) -->
             <div class="side-column">
                 <div class="box" id="slot-1" data-points="0" data-active="false"></div>
                 <div class="box" id="slot-2" data-points="0" data-active="false"></div>
@@ -194,7 +193,6 @@
                 <div class="box" id="slot-4" data-points="0" data-active="false"></div>
             </div>
 
-            <!-- Kolom Kanan (Slot 5 - 8) -->
             <div class="side-column">
                 <div class="box" id="slot-5" data-points="0" data-active="false"></div>
                 <div class="box" id="slot-6" data-points="0" data-active="false"></div>
@@ -203,8 +201,10 @@
             </div>
         </div>
 
-        <!-- Elemen Video Animasi / Gift Full Layar -->
+        <!-- Video sumber (disembunyikan) -->
         <video class="bg-video-layer" id="bgVideoLayer" playsinline></video>
+        <!-- Canvas hasil keying (yang ditampilkan) -->
+        <canvas class="bg-canvas-layer" id="bgCanvasLayer"></canvas>
     </div>
 
     <script>
@@ -234,15 +234,156 @@
         }
 
         const channel = new BroadcastChannel('live_control_channel');
-        const bgVideo = document.getElementById('bgVideoLayer');
         const hostVideo = document.getElementById('hostVideoLayer');
+        const bgVideo = document.getElementById('bgVideoLayer');   // sumber (disembunyikan)
+        const bgCanvas = document.getElementById('bgCanvasLayer'); // hasil keying (ditampilkan)
+        const wrapper = document.querySelector('.wrapper-9-16');
+
+        /* ================= PENGATURAN TRANSPARANSI =================
+           KEY_LOW  : luminance di bawah nilai ini -> TRANSPARAN penuh (hitam)
+           KEY_HIGH : luminance di atas nilai ini  -> SOLID penuh (warna asli)
+           - Masih ada sisa hitam samar?      -> naikkan KEY_HIGH (mis. 0.3)
+           - Bagian warna gelap ikut hilang?  -> turunkan kedua nilai        */
+        const KEY_LOW = 0.05;
+        const KEY_HIGH = 0.22;
+        /* =========================================================== */
 
         const slotIntervals = {};
         const activeTopIconTimers = {};
 
-        bgVideo.onended = () => {
+        /* ---------- WebGL: hitam jadi transparan, warna tetap solid ---------- */
+        let gl = null, glProgram = null, uni = {};
+        let bgRAF = null, glBroken = false;
+
+        function initBgKeying() {
+            try {
+                gl = bgCanvas.getContext('webgl', { alpha: true, premultipliedAlpha: false, antialias: false });
+            } catch (e) { gl = null; }
+            if (!gl) return false;
+
+            const vsSrc = `
+                attribute vec2 a_pos;
+                varying vec2 v_uv;
+                void main() {
+                    v_uv = a_pos * 0.5 + 0.5;
+                    gl_Position = vec4(a_pos, 0.0, 1.0);
+                }`;
+
+            const fsSrc = `
+                precision mediump float;
+                varying vec2 v_uv;
+                uniform sampler2D u_tex;
+                uniform vec2 u_scale;
+                uniform vec2 u_offset;
+                uniform float u_low;
+                uniform float u_high;
+                void main() {
+                    vec2 uv = u_offset + (v_uv - 0.5) * u_scale;
+                    vec4 c = texture2D(u_tex, uv);
+                    float lum = max(c.r, max(c.g, c.b));
+                    float a = smoothstep(u_low, u_high, lum);
+                    gl_FragColor = vec4(c.rgb, a);
+                }`;
+
+            function compile(type, src) {
+                const sh = gl.createShader(type);
+                gl.shaderSource(sh, src);
+                gl.compileShader(sh);
+                return gl.getShaderParameter(sh, gl.COMPILE_STATUS) ? sh : null;
+            }
+
+            const vs = compile(gl.VERTEX_SHADER, vsSrc);
+            const fs = compile(gl.FRAGMENT_SHADER, fsSrc);
+            if (!vs || !fs) return false;
+
+            glProgram = gl.createProgram();
+            gl.attachShader(glProgram, vs);
+            gl.attachShader(glProgram, fs);
+            gl.linkProgram(glProgram);
+            if (!gl.getProgramParameter(glProgram, gl.LINK_STATUS)) return false;
+            gl.useProgram(glProgram);
+
+            const tex = gl.createTexture();
+            gl.bindTexture(gl.TEXTURE_2D, tex);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+            gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 0, 0]));
+
+            const buf = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+            const loc = gl.getAttribLocation(glProgram, 'a_pos');
+            gl.enableVertexAttribArray(loc);
+            gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+
+            uni.tex = gl.getUniformLocation(glProgram, 'u_tex');
+            uni.scale = gl.getUniformLocation(glProgram, 'u_scale');
+            uni.offset = gl.getUniformLocation(glProgram, 'u_offset');
+            uni.low = gl.getUniformLocation(glProgram, 'u_low');
+            uni.high = gl.getUniformLocation(glProgram, 'u_high');
+
+            gl.uniform1i(uni.tex, 0);
+            gl.uniform1f(uni.low, KEY_LOW);
+            gl.uniform1f(uni.high, KEY_HIGH);
+            gl.uniform2f(uni.scale, 1, 1);
+            gl.uniform2f(uni.offset, 0.5, 0.5);
+
+            gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+            gl.clearColor(0, 0, 0, 0);
+            return true;
+        }
+
+        const hasGL = initBgKeying();
+
+        // Crop "cover" di dalam shader agar video tidak gepeng / tidak terpotong salah
+        function updateCover() {
+            if (!gl || !bgVideo.videoWidth || !bgVideo.videoHeight) return;
+            const rect = wrapper.getBoundingClientRect();
+            const containerAspect = rect.width / Math.max(1, rect.height);
+            const videoAspect = bgVideo.videoWidth / bgVideo.videoHeight;
+            let sx = 1, sy = 1;
+            if (videoAspect > containerAspect) sx = containerAspect / videoAspect;
+            else sy = videoAspect / containerAspect;
+            gl.uniform2f(uni.scale, sx, sy);
+            gl.uniform2f(uni.offset, 0.5, 0.5);
+        }
+
+        function renderLoop() {
+            bgRAF = requestAnimationFrame(renderLoop);
+            if (glBroken || bgVideo.readyState < 2) return;
+            try {
+                gl.viewport(0, 0, bgCanvas.width, bgCanvas.height);
+                gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, bgVideo);
+                gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+            } catch (e) {
+                // Video cross-origin / error WebGL -> fallback ke metode blend lama
+                glBroken = true;
+                if (bgRAF) { cancelAnimationFrame(bgRAF); bgRAF = null; }
+                bgCanvas.style.display = 'none';
+                bgVideo.style.display = 'block';
+            }
+        }
+
+        function showBg() {
+            if (hasGL && !glBroken) {
+                bgVideo.style.display = 'none';
+                bgCanvas.style.display = 'block';
+                if (!bgRAF) renderLoop();
+            } else {
+                bgVideo.style.display = 'block'; // fallback: mix-blend-mode: screen
+            }
+        }
+
+        function hideBg() {
+            if (bgRAF) { cancelAnimationFrame(bgRAF); bgRAF = null; }
+            bgCanvas.style.display = 'none';
             bgVideo.style.display = 'none';
-            bgVideo.src = '';
+        }
+
+        bgVideo.onended = () => {
+            hideBg();
             hideAllTopIcons();
         };
 
@@ -250,6 +391,16 @@
             for (let i = 1; i <= 8; i++) {
                 const iconEl = document.getElementById(`slot-top-icon-${i}`);
                 if (iconEl) iconEl.style.display = 'none';
+            }
+        }
+
+        function scheduleIconHide(slotId) {
+            const topIconEl = document.getElementById(`slot-top-icon-${slotId}`);
+            if (!topIconEl) return;
+            if (activeTopIconTimers[slotId]) clearTimeout(activeTopIconTimers[slotId]);
+            const dur = bgVideo.duration;
+            if (!isNaN(dur) && dur > 0) {
+                activeTopIconTimers[slotId] = setTimeout(() => { topIconEl.style.display = 'none'; }, dur * 1000);
             }
         }
 
@@ -299,12 +450,29 @@
                 bgVideo.pause();
                 bgVideo.currentTime = 0;
                 bgVideo.src = url;
-                bgVideo.style.display = 'block';
+                bgVideo.muted = false;
+
+                bgVideo.onloadedmetadata = () => {
+                    if (hasGL && !glBroken && bgVideo.videoWidth) {
+                        bgCanvas.width = bgVideo.videoWidth;
+                        bgCanvas.height = bgVideo.videoHeight;
+                        updateCover();
+                    }
+                    const s = data.slot;
+                    if (s && s >= 1 && s <= 8) {
+                        const slotEl = document.getElementById(`slot-${s}`);
+                        if (slotEl && slotEl.getAttribute('data-active') === 'true' && !activeTopIconTimers[s]) {
+                            scheduleIconHide(s);
+                        }
+                    }
+                };
+
                 bgVideo.load();
-                bgVideo.muted = false; 
-                bgVideo.play().catch(e => {
+
+                const startPlay = () => showBg();
+                bgVideo.play().then(startPlay).catch(() => {
                     bgVideo.muted = true;
-                    bgVideo.play();
+                    bgVideo.play().then(startPlay).catch(e => console.log('Gagal memutar video animasi:', e));
                 });
 
                 const targetSlotId = data.slot;
@@ -327,23 +495,7 @@
                         if (topIconEl && topIconImg) {
                             topIconImg.src = url;
                             topIconEl.style.display = 'flex';
-
-                            if (activeTopIconTimers[targetSlotId]) {
-                                clearTimeout(activeTopIconTimers[targetSlotId]);
-                            }
-
-                            const handleHideIcon = () => { topIconEl.style.display = 'none'; };
-
-                            if (!isNaN(bgVideo.duration) && bgVideo.duration > 0) {
-                                activeTopIconTimers[targetSlotId] = setTimeout(handleHideIcon, bgVideo.duration * 1000);
-                            } else {
-                                bgVideo.onloadedmetadata = () => {
-                                    const dur = bgVideo.duration * 1000;
-                                    if (!isNaN(dur)) {
-                                        activeTopIconTimers[targetSlotId] = setTimeout(handleHideIcon, dur);
-                                    }
-                                };
-                            }
+                            scheduleIconHide(targetSlotId);
                         }
                     }
                 }
