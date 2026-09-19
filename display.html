@@ -29,12 +29,11 @@
             border-radius: 0px;
         }
 
-        /* VIDIO HOST: area ATAS (tinggi diatur via JS = 30%) */
+        /* VIDIO HOST: FULL SCREEN (latar belakang) */
         .host-video-layer {
             position: absolute;
             top: 0; left: 0;
-            width: 100%;
-            height: 30%;
+            width: 100%; height: 100%;
             object-fit: cover;
             z-index: 1;
             display: none;
@@ -141,19 +140,18 @@
         .mic-icon-bottom-right { display: none; align-items: center; justify-content: center; flex-shrink: 0; }
         .mic-icon-bottom-right svg { width: 8px; height: 8px; fill: #ffffff; }
 
-        /* VIDIO ANIMASI: area BAWAH (tinggi diatur via JS = 70%) */
+        /* VIDIO ANIMASI: FULL SCREEN (lapisan di atas host) */
         .anim-area {
             position: absolute;
-            left: 0; right: 0; bottom: 0;
-            width: 100%;
-            height: 70%;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
             overflow: hidden;
             z-index: 20;
             display: none;
             pointer-events: none;
         }
 
-        /* Video animasi langsung (mode tanpa keying / fallback): kualitas native penuh */
+        /* Mode tanpa keying: tampil utuh apa adanya, kualitas native penuh */
         .anim-video {
             position: absolute; top: 0; left: 0;
             width: 100%; height: 100%;
@@ -162,7 +160,7 @@
             transform: translateZ(0);
         }
 
-        /* Canvas keying: dirender pada resolusi ASLI video -> tajam/HD */
+        /* Canvas keying: dirender pada RESOLUSI ASLI vidio -> tajam HD */
         .anim-canvas {
             position: absolute; top: 0; left: 0;
             width: 100%; height: 100%;
@@ -193,10 +191,10 @@
 <body>
 
     <div class="wrapper-9-16">
-        <!-- VIDIO HOST (area atas) -->
+        <!-- VIDIO HOST: full screen, latar belakang -->
         <video class="host-video-layer" id="hostVideoLayer" playsinline loop muted></video>
 
-        <!-- UI Slot (di atas segalanya agar selalu terbaca jelas) -->
+        <!-- UI Slot (paling atas agar selalu terbaca) -->
         <div class="main-container">
             <div class="side-column">
                 <div class="box" id="slot-1" data-points="0" data-active="false"></div>
@@ -213,7 +211,7 @@
             </div>
         </div>
 
-        <!-- VIDIO ANIMASI (area bawah) -->
+        <!-- VIDIO ANIMASI: full screen, menumpuk di atas host -->
         <div class="anim-area" id="animArea">
             <video class="anim-video" id="bgVideoLayer" playsinline></video>
             <canvas class="anim-canvas" id="bgCanvasLayer"></canvas>
@@ -252,27 +250,24 @@
         const bgCanvas = document.getElementById('bgCanvasLayer');
         const animArea = document.getElementById('animArea');
 
-        /* ================= PENGATURAN LAYOUT & KUALITAS =================
-           HOST_TINGGI    : tinggi area vidio host dalam persen layar
-           ANIMASI_TINGGI : tinggi area vidio animasi dalam persen layar
-                            (usahakan keduanya berjumlah 100)
+        /* ================= PENGATURAN =================
+           Kedua vidio FULL SCREEN:
+           - Vidio host  : latar belakang penuh layar
+           - Vidio animasi: menumpuk penuh layar di atas host
 
-           HAPUS_HITAM    : true  -> hitam pada vidio animasi jadi transparan,
-                                    warna tampil SOLID 100% warna asli
-                            false -> vidio animasi tampil utuh apa adanya
+           HAPUS_HITAM : true  -> hitam pada vidio animasi jadi TRANSPARAN
+                                 (vidio host terlihat di bagian itu),
+                                 warna tampil SOLID 100% warna asli
+                         false -> vidio animasi menutupi seluruh layar apa adanya
 
            KEY_LOW / KEY_HIGH : seberapa "gelap" piksel dianggap hitam
-           (Agar HD: canvas dirender pada RESOLUSI ASLI vidio, bukan resolusi layar) */
-        const HOST_TINGGI = 30;     // persen
-        const ANIMASI_TINGGI = 70;  // persen
+                                - masih ada sisa hitam samar?  -> naikkan KEY_HIGH (mis. 0.3)
+                                - warna gelap ikut hilang?     -> turunkan keduanya
+           HD: canvas dirender pada RESOLUSI ASLI vidio, bukan resolusi layar */
         const HAPUS_HITAM = true;
         const KEY_LOW = 0.05;
         const KEY_HIGH = 0.22;
-        /* ================================================================ */
-
-        // Terapkan pembagian area
-        hostVideo.style.height = HOST_TINGGI + '%';
-        animArea.style.height = ANIMASI_TINGGI + '%';
+        /* ============================================== */
 
         const slotIntervals = {};
         const activeTopIconTimers = {};
@@ -366,8 +361,8 @@
             return true;
         }
 
-        /* Crop "cover" dihitung terhadap AREA ANIMASI (bukan layar penuh)
-           agar vidio mengisi area 70% tanpa gepeng dan tanpa kehilangan ketajaman */
+        /* Crop "cover" dihitung terhadap layar penuh agar vidio mengisi seluruh
+           layar tanpa gepeng dan tetap tajam */
         function updateCover() {
             if (!gl || !bgVideo.videoWidth || !bgVideo.videoHeight) return;
             const rect = bgCanvas.getBoundingClientRect();
@@ -487,9 +482,8 @@
                 bgVideo.muted = false;
 
                 bgVideo.onloadedmetadata = () => {
-                    /* Kunci utama HD: canvas memakai RESOLUSI ASLI vidio
-                       (mis. 1080x1920), lalu ditampilkan menyesuaikan area.
-                       Hasilnya tajam, tidak pecah/blur. */
+                    /* Kunci HD: canvas memakai RESOLUSI ASLI vidio
+                       (mis. 1080x1920), lalu diskalakan ke layar -> tajam */
                     if (HAPUS_HITAM && hasGL && !glBroken && bgVideo.videoWidth) {
                         bgCanvas.width = bgVideo.videoWidth;
                         bgCanvas.height = bgVideo.videoHeight;
